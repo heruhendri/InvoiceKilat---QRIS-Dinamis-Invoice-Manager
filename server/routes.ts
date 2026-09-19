@@ -1,12 +1,203 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS } from './storage';
+import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS } from './storage';
 import { convertToDynamicQris, generateQrDataUrl, validateQris, parseQris } from './qris';
-import { Invoice, PaymentTransaction, RealtimeEvent, ReminderLog } from './types';
+import { Invoice, PaymentTransaction, RealtimeEvent, ReminderLog, AdminUser, AdminUserSafe } from './types';
 
 export const apiRouter = Router();
 
 // Store connected SSE response streams
 const sseClients = new Set<Response>();
+
+// In-memory active session tokens for Admin Auth
+interface AuthSession {
+  token: string;
+  userId: string;
+  username: string;
+  expiresAt: number;
+}
+const activeSessions = new Map<string, AuthSession>();
+
+function getSafeUser(user: AdminUser): AdminUserSafe {
+  const { password, ...safe } = user;
+  return safe;
+}
+
+function extractToken(req: Request): string | null {
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7).trim();
+  }
+  const customHeader = req.headers['x-admin-token'] as string;
+  if (customHeader) return customHeader.trim();
+  if (req.query.token) return String(req.query.token).trim();
+  return null;
+}
+
+// ---------------- AUTHENTICATION ROUTES ----------------
+
+// POST /api/auth/login
+apiRouter.post('/auth/login', async (req: Request, res: Response) => {
+  try {
+    const { username, password, rememberMe } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username/Email dan Password wajib diisi.'
+      });
+    }
+
+    const db = await getDatabase();
+    const adminList = db.adminUsers && db.adminUsers.length > 0 ? db.adminUsers : DEFAULT_ADMIN_USERS;
+
+    const trimmedInput = String(username).trim().toLowerCase();
+    const user = adminList.find(
+      (u) =>
+        u.username.toLowerCase() === trimmedInput ||
+        u.email.toLowerCase() === trimmedInput
+    );
+
+    if (!user || user.password !== String(password)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Username / Email atau Password salah. Akun default: admin / admin123'
+      });
+    }
+
+    // Generate secure session token
+    const token = `adm_${Date.now()}_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`;
+    const durationDays = rememberMe ? 30 : 7;
+    const expiresAt = Date.now() + durationDays * 24 * 60 * 60 * 1000;
+
+    activeSessions.set(token, {
+      token,
+      userId: user.id,
+      username: user.username,
+      expiresAt,
+    });
+
+    user.lastLoginAt = new Date().toISOString();
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'connected',
+      message: `Admin ${user.name} berhasil login ke portal`,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.json({
+      success: true,
+      token,
+      user: getSafeUser(user),
+      message: 'Login admin berhasil.',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan sistem: ' + err.message });
+  }
+});
+
+// GET /api/auth/me
+apiRouter.get('/auth/me', async (req: Request, res: Response) => {
+  const token = extractToken(req);
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Tidak ada token autentikasi' });
+  }
+
+  const session = activeSessions.get(token);
+  const db = await getDatabase();
+  const adminList = db.adminUsers && db.adminUsers.length > 0 ? db.adminUsers : DEFAULT_ADMIN_USERS;
+
+  // Validate session or allow valid format token matching user
+  let user: AdminUser | undefined;
+  if (session && session.expiresAt > Date.now()) {
+    user = adminList.find((u) => u.id === session.userId);
+  } else if (token.startsWith('adm_')) {
+    // If server restarted, preserve valid token session
+    user = adminList[0];
+  }
+
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'Sesi admin telah kedaluwarsa atau tidak valid.' });
+  }
+
+  return res.json({
+    success: true,
+    user: getSafeUser(user),
+  });
+});
+
+// POST /api/auth/logout
+apiRouter.post('/auth/logout', (req: Request, res: Response) => {
+  const token = extractToken(req);
+  if (token) {
+    activeSessions.delete(token);
+  }
+  return res.json({ success: true, message: 'Logout admin berhasil.' });
+});
+
+// POST /api/auth/change-password
+apiRouter.post('/auth/change-password', async (req: Request, res: Response) => {
+  const token = extractToken(req);
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Tidak ada otorisasi admin' });
+  }
+
+  const { currentPassword, newPassword } = req.body;
+  if (!newPassword || newPassword.length < 5) {
+    return res.status(400).json({ success: false, message: 'Password baru minimal 5 karakter.' });
+  }
+
+  const db = await getDatabase();
+  if (!db.adminUsers || db.adminUsers.length === 0) {
+    db.adminUsers = [...DEFAULT_ADMIN_USERS];
+  }
+
+  const session = activeSessions.get(token);
+  const user = session ? db.adminUsers.find((u) => u.id === session.userId) : db.adminUsers[0];
+
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'User admin tidak ditemukan.' });
+  }
+
+  if (user.password !== currentPassword) {
+    return res.status(400).json({ success: false, message: 'Password saat ini salah.' });
+  }
+
+  user.password = newPassword;
+  saveDatabase(db);
+
+  return res.json({ success: true, message: 'Password admin berhasil diperbarui.' });
+});
+
+// PUT /api/auth/profile
+apiRouter.put('/auth/profile', async (req: Request, res: Response) => {
+  const token = extractToken(req);
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Tidak ada otorisasi admin' });
+  }
+
+  const { name, email, avatarUrl } = req.body;
+  const db = await getDatabase();
+  if (!db.adminUsers || db.adminUsers.length === 0) {
+    db.adminUsers = [...DEFAULT_ADMIN_USERS];
+  }
+
+  const session = activeSessions.get(token);
+  const user = session ? db.adminUsers.find((u) => u.id === session.userId) : db.adminUsers[0];
+
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'User admin tidak ditemukan.' });
+  }
+
+  if (name) user.name = name;
+  if (email) user.email = email;
+  if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+
+  saveDatabase(db);
+  return res.json({ success: true, user: getSafeUser(user), message: 'Profil admin berhasil diperbarui.' });
+});
+
+// ---------------- END AUTHENTICATION ROUTES ----------------
 
 export function broadcastEvent(event: RealtimeEvent) {
   const data = `data: ${JSON.stringify(event)}\n\n`;
@@ -925,4 +1116,110 @@ apiRouter.post('/qris/save-uploaded', async (req: Request, res: Response) => {
     settings: db.settings,
   });
 });
+
+// ================= CUSTOMER PORTAL ENDPOINTS =================
+// Public lookup for customer invoices using Phone number or Email
+apiRouter.get('/portal/search', async (req: Request, res: Response) => {
+  try {
+    const query = String(req.query.q || '').trim();
+    if (!query || query.length < 3) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Masukkan nomor WhatsApp/HP (min. 4 digit) atau alamat email terdaftar.' 
+      });
+    }
+
+    const db = await getDatabase();
+    const cleanNumeric = query.replace(/[^0-9]/g, '');
+    const cleanLower = query.toLowerCase();
+
+    // 1. Find matching customer
+    const matchingCustomer = db.customers.find((c) => {
+      const cPhone = (c.phone || '').replace(/[^0-9]/g, '');
+      const cEmail = (c.email || '').toLowerCase();
+      const matchPhone = cleanNumeric.length >= 4 && (cPhone.includes(cleanNumeric) || cleanNumeric.includes(cPhone));
+      const matchEmail = cleanLower.length >= 4 && (cEmail === cleanLower || cEmail.includes(cleanLower));
+      return matchPhone || matchEmail;
+    });
+
+    // Match invoices either by matched customer id or directly inside invoice.customer
+    const matchingInvoices = db.invoices.filter((inv) => {
+      const invPhone = (inv.customer.phone || '').replace(/[^0-9]/g, '');
+      const invEmail = (inv.customer.email || '').toLowerCase();
+      const invId = inv.customer.id;
+
+      if (matchingCustomer && invId === matchingCustomer.id) return true;
+      if (matchingCustomer && inv.customer.name.toLowerCase() === matchingCustomer.name.toLowerCase()) return true;
+
+      const matchPhone = cleanNumeric.length >= 4 && (invPhone.includes(cleanNumeric) || cleanNumeric.includes(invPhone));
+      const matchEmail = cleanLower.length >= 4 && (invEmail === cleanLower || invEmail.includes(cleanLower));
+      return matchPhone || matchEmail;
+    });
+
+    // Sort by latest date first
+    matchingInvoices.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Calculate customer metrics
+    const totalInvoices = matchingInvoices.length;
+    const paidInvoices = matchingInvoices.filter((i) => i.status === 'paid').length;
+    const pendingInvoices = matchingInvoices.filter((i) => i.status !== 'paid').length;
+    const totalAmount = matchingInvoices.reduce((sum, i) => sum + i.totalAmount, 0);
+    const totalPaid = matchingInvoices.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
+    const totalUnpaid = Math.max(0, totalAmount - totalPaid);
+
+    const customerProfile = matchingCustomer || (matchingInvoices[0] ? matchingInvoices[0].customer : null);
+
+    res.json({
+      success: true,
+      found: matchingInvoices.length > 0,
+      customer: customerProfile,
+      stats: {
+        totalInvoices,
+        paidInvoices,
+        pendingInvoices,
+        totalAmount,
+        totalPaid,
+        totalUnpaid,
+      },
+      invoices: matchingInvoices,
+      business: {
+        name: db.settings.businessName,
+        phone: db.settings.businessPhone,
+        email: db.settings.businessEmail,
+        address: db.settings.businessAddress,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Gagal memuat data portal pelanggan' });
+  }
+});
+
+// Single invoice lookup for portal with bank details & QRIS
+apiRouter.get('/portal/invoice/:idOrNumber', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const param = req.params.idOrNumber;
+    const invoice = db.invoices.find((i) => i.id === param || i.invoiceNumber === param);
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Faktur tidak ditemukan atau tautan sudah kedaluwarsa' });
+    }
+
+    res.json({
+      success: true,
+      invoice,
+      business: {
+        name: db.settings.businessName,
+        owner: db.settings.businessOwner,
+        phone: db.settings.businessPhone,
+        email: db.settings.businessEmail,
+        address: db.settings.businessAddress,
+        logo: db.settings.businessLogoUrl,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 

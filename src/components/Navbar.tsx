@@ -13,13 +13,19 @@ import {
   Clock,
   Users,
   Package,
-  Zap
+  Zap,
+  Globe,
+  ExternalLink,
+  LogOut,
+  User,
+  ChevronDown,
+  ShieldCheck
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
-import { RealtimeEvent } from '../types';
+import { RealtimeEvent, AdminUser } from '../types';
 import { formatDateTimeIndo } from '../utils/formatters';
 
-export type AppNavTab = 'dashboard' | 'invoices' | 'customers' | 'services' | 'automation' | 'qris' | 'spreadsheet';
+export type AppNavTab = 'dashboard' | 'invoices' | 'customers' | 'services' | 'automation' | 'qris' | 'spreadsheet' | 'portal';
 
 interface NavbarProps {
   currentTab: AppNavTab;
@@ -33,6 +39,8 @@ interface NavbarProps {
   onSelectInvoice: (id: string) => void;
   onTriggerSync: () => void;
   isSyncing: boolean;
+  adminUser?: AdminUser | null;
+  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -47,8 +55,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectInvoice,
   onTriggerSync,
   isSyncing,
+  adminUser,
+  onLogout,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
@@ -67,8 +78,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="font-extrabold text-base tracking-tight text-slate-900">
                   Invoice<span className="text-blue-600">Kilat</span>
                 </span>
-                <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 uppercase">
-                  QRIS Dinamis
+                <span className="rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
+                  Admin
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
@@ -156,6 +167,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <TableProperties className="h-3.5 w-3.5" />
               <span>Spreadsheet</span>
+            </button>
+
+            <button
+              id="tab-portal-btn"
+              onClick={() => onSelectTab('portal')}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                currentTab === 'portal'
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <Globe className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Portal Pelanggan</span>
             </button>
           </nav>
         </div>
@@ -247,6 +271,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
+          {/* Quick Switch to Customer Portal */}
+          <button
+            id="nav-open-customer-portal-btn"
+            onClick={() => onSelectTab('portal')}
+            className="hidden xl:flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/80 px-2.5 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
+            title="Buka Portal Mandiri Pelanggan (Tampilan Klien)"
+          >
+            <ExternalLink className="h-3.5 w-3.5 text-emerald-600" />
+            <span>Portal Pelanggan</span>
+          </button>
+
           {/* Settings Button */}
           <button
             id="settings-modal-btn"
@@ -257,6 +292,92 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Settings className="h-5 w-5" />
           </button>
+
+          {/* Admin User Profile Dropdown */}
+          {adminUser && (
+            <div className="relative">
+              <button
+                id="admin-user-menu-btn"
+                onClick={() => setShowUserDropdown(!showUserDropdown)}
+                className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50/80 hover:bg-slate-100 transition text-left"
+                title="Akun Pengelola"
+              >
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                  {adminUser.avatarUrl ? (
+                    <img src={adminUser.avatarUrl} alt={adminUser.name} className="w-full h-full rounded-lg object-cover" />
+                  ) : (
+                    <span>{adminUser.name.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <div className="hidden md:block">
+                  <div className="text-xs font-bold text-slate-800 leading-none truncate max-w-[110px]">
+                    {adminUser.name}
+                  </div>
+                  <div className="text-[10px] text-blue-600 font-semibold leading-none mt-1 flex items-center gap-1">
+                    <ShieldCheck className="w-2.5 h-2.5" />
+                    <span>Admin</span>
+                  </div>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showUserDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showUserDropdown && (
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white p-2 shadow-2xl ring-1 ring-black/5 z-50 animate-in fade-in zoom-in-95">
+                  <div className="px-3 py-2.5 border-b border-slate-100">
+                    <div className="text-xs font-bold text-slate-900">{adminUser.name}</div>
+                    <div className="text-[11px] text-slate-500 truncate">{adminUser.email}</div>
+                    <div className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wider border border-blue-100">
+                      <ShieldCheck className="w-3 h-3" />
+                      <span>{adminUser.role === 'superadmin' ? 'Super Administrator' : 'Staff Keuangan'}</span>
+                    </div>
+                  </div>
+
+                  <div className="py-1 space-y-0.5">
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        onOpenSettings();
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-2 transition"
+                    >
+                      <Settings className="w-4 h-4 text-slate-400" />
+                      <span>Pengaturan Bisnis & Akun</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        onSelectTab('portal');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 rounded-xl flex items-center gap-2 transition"
+                    >
+                      <Globe className="w-4 h-4 text-emerald-500" />
+                      <span>Lihat Portal Pelanggan</span>
+                    </button>
+                  </div>
+
+                  {onLogout && (
+                    <div className="pt-1 border-t border-slate-100">
+                      <button
+                        id="admin-logout-btn"
+                        onClick={() => {
+                          setShowUserDropdown(false);
+                          if (window.confirm('Yakin ingin keluar dari akun admin?')) {
+                            onLogout();
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl flex items-center gap-2 transition"
+                      >
+                        <LogOut className="w-4 h-4 text-rose-500" />
+                        <span>Keluar (Logout)</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* New Invoice CTA Button */}
           <button
@@ -332,6 +453,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           <TableProperties className="h-4 w-4" />
           <span className="text-[10px] mt-0.5">Sheets</span>
         </button>
+
+        {onLogout && (
+          <button
+            onClick={() => {
+              if (window.confirm('Yakin ingin keluar dari akun admin?')) {
+                onLogout();
+              }
+            }}
+            className="flex flex-col items-center py-1 px-2 rounded-lg shrink-0 text-rose-600 hover:bg-rose-50"
+            title="Keluar Admin"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="text-[10px] mt-0.5">Logout</span>
+          </button>
+        )}
       </div>
     </header>
   );

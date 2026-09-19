@@ -4,7 +4,6 @@ import {
   Plus, 
   Trash2, 
   FileText, 
-  QrCode, 
   User, 
   Calendar, 
   Percent, 
@@ -17,7 +16,6 @@ import {
 } from 'lucide-react';
 import { Invoice, InvoiceItem, CustomerRecord, ServiceItem } from '../types';
 import { formatRupiah } from '../utils/formatters';
-import { QRISImageUploader } from './QRISImageUploader';
 
 interface InvoiceFormModalProps {
   isOpen: boolean;
@@ -570,39 +568,6 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 <span>Total Akhir:</span>
                 <span className="text-blue-600 font-mono text-base">{formatRupiah(grandTotal)}</span>
               </div>
-            </div>
-          </div>
-
-          {/* QRIS Configuration for this invoice */}
-          <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-blue-900 flex items-center gap-1.5">
-                <QrCode className="w-4 h-4 text-blue-600" />
-                <span>QRIS Bisnis Statis Sumber (DANA Bisnis Merchant)</span>
-              </label>
-              <span className="text-[10px] text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full font-bold">
-                Auto-Dinamis
-              </span>
-            </div>
-
-            {/* Upload QRIS Image Component */}
-            <QRISImageUploader
-              label="Upload Screenshot QRIS DANA Bisnis"
-              currentPayload={staticQris}
-              onQRISDecoded={(payload) => setStaticQris(payload)}
-            />
-
-            <div>
-              <label className="text-[10px] text-slate-500 font-medium block mb-1">
-                Atau masukkan string QRIS statis secara manual:
-              </label>
-              <textarea
-                rows={2}
-                value={staticQris}
-                onChange={(e) => setStaticQris(e.target.value)}
-                placeholder="00020101021126590014ID.DANA.WWW..."
-                className="w-full px-3 py-2 text-[11px] font-mono rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500"
-              />
             </div>
           </div>
 

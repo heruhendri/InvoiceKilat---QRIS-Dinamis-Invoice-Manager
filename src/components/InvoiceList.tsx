@@ -13,7 +13,8 @@ import {
   QrCode, 
   Building, 
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 import { Invoice } from '../types';
 import { formatRupiah, formatDateIndo, getStatusDetails } from '../utils/formatters';
@@ -28,6 +29,7 @@ interface InvoiceListProps {
   onPrintInvoice: (invoice: Invoice) => void;
   onSendWhatsApp: (invoice: Invoice) => void;
   onSendEmailReminder: (invoice: Invoice) => void;
+  onOpenPortal?: (invoice: Invoice) => void;
 }
 
 export const InvoiceList: React.FC<InvoiceListProps> = ({
@@ -40,6 +42,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   onPrintInvoice,
   onSendWhatsApp,
   onSendEmailReminder,
+  onOpenPortal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -279,6 +282,17 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
                           >
                             <Share2 className="w-4 h-4" />
                           </button>
+
+                          {/* Customer Portal Link */}
+                          {onOpenPortal && (
+                            <button
+                              onClick={() => onOpenPortal(inv)}
+                              className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                              title="Buka Tampilan Portal Pelanggan"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </button>
+                          )}
 
                           {/* Email Reminder Trigger */}
                           {!isPaid && (

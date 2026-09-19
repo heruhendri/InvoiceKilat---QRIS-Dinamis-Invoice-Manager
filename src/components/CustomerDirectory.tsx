@@ -14,25 +14,32 @@ import {
   DollarSign, 
   X,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
-import { CustomerRecord } from '../types';
+import { CustomerRecord, Invoice } from '../types';
 import { formatRupiah } from '../utils/formatters';
 
 interface CustomerDirectoryProps {
   customers: CustomerRecord[];
-  onAddCustomer: (customer: Partial<CustomerRecord>) => Promise<void>;
-  onUpdateCustomer: (id: string, customer: Partial<CustomerRecord>) => Promise<void>;
+  invoices?: Invoice[];
+  onAddCustomer?: (customer: Partial<CustomerRecord>) => Promise<void>;
+  onUpdateCustomer?: (id: string, customer: Partial<CustomerRecord>) => Promise<void>;
+  onSaveCustomer?: (customer: Partial<CustomerRecord>) => Promise<void>;
   onDeleteCustomer: (id: string) => Promise<void>;
   onCreateInvoiceForCustomer: (customer: CustomerRecord) => void;
+  onOpenPortalForCustomer?: (phoneOrEmail: string) => void;
 }
 
 export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
   customers,
+  invoices,
   onAddCustomer,
   onUpdateCustomer,
+  onSaveCustomer,
   onDeleteCustomer,
   onCreateInvoiceForCustomer,
+  onOpenPortalForCustomer,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -83,7 +90,17 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
     setFormError('');
 
     try {
-      if (editingCustomer) {
+      if (onSaveCustomer) {
+        await onSaveCustomer({
+          ...(editingCustomer ? { id: editingCustomer.id } : {}),
+          name,
+          company,
+          email,
+          phone,
+          address,
+          notes,
+        });
+      } else if (editingCustomer && onUpdateCustomer) {
         await onUpdateCustomer(editingCustomer.id, {
           name,
           company,
@@ -92,7 +109,7 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
           address,
           notes,
         });
-      } else {
+      } else if (onAddCustomer) {
         await onAddCustomer({
           name,
           company,
@@ -278,18 +295,31 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
               </div>
 
               {/* Bottom Quick Action */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                 <span className="text-[11px] text-slate-400 font-medium">
                   {cust.totalInvoices || 0} Invoice
                 </span>
 
-                <button
-                  onClick={() => onCreateInvoiceForCustomer(cust)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white text-xs font-bold transition active:scale-95"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Buat Faktur</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {onOpenPortalForCustomer && (
+                    <button
+                      onClick={() => onOpenPortalForCustomer(cust.phone || cust.email || cust.name)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition"
+                      title="Buka Portal Tagihan Pelanggan Ini"
+                    >
+                      <ExternalLink className="w-3 h-3 text-emerald-600" />
+                      <span className="hidden sm:inline">Portal</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => onCreateInvoiceForCustomer(cust)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white text-xs font-bold transition active:scale-95"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Buat Faktur</span>
+                  </button>
+                </div>
               </div>
             </div>
           ))

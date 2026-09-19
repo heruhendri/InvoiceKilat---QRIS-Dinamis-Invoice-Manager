@@ -176,3 +176,14 @@ export interface AnalyticsSummary {
   monthlyChartData: { label: string; revenue: number; invoiceCount: number }[];
   recentTransactions: (PaymentTransaction & { customerName: string })[];
 }
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: 'superadmin' | 'finance' | 'staff';
+  avatarUrl?: string;
+  createdAt?: string;
+  lastLoginAt?: string;
+}

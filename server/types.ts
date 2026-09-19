@@ -155,3 +155,26 @@ export interface RealtimeEvent {
   timestamp: string;
   payload?: any;
 }
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: 'superadmin' | 'finance' | 'staff';
+  password: string;
+  avatarUrl?: string;
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+export interface AdminUserSafe {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: 'superadmin' | 'finance' | 'staff';
+  avatarUrl?: string;
+  createdAt?: string;
+  lastLoginAt?: string;
+}

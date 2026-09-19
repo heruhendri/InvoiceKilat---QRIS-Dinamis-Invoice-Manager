@@ -8,7 +8,8 @@ import {
   CustomerRecord, 
   ServiceItem, 
   BillingAutomationRule, 
-  AutomationDispatchLog 
+  AutomationDispatchLog,
+  AdminUser
 } from './types';
 import { convertToDynamicQris, generateQrDataUrl } from './qris';
 
@@ -27,7 +28,31 @@ export interface DatabaseSchema {
   automationRules: BillingAutomationRule[];
   automationLogs: AutomationDispatchLog[];
   remindersLog: ReminderLog[];
+  adminUsers?: AdminUser[];
 }
+
+export const DEFAULT_ADMIN_USERS: AdminUser[] = [
+  {
+    id: 'admin-1',
+    username: 'admin',
+    email: 'admin@ciptamedia.id',
+    name: 'Budi Santoso',
+    role: 'superadmin',
+    password: 'admin123',
+    avatarUrl: '',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'admin-2',
+    username: 'heruu2004',
+    email: 'heruu2004@gmail.com',
+    name: 'Heru (Super Admin)',
+    role: 'superadmin',
+    password: 'admin123',
+    avatarUrl: '',
+    createdAt: new Date().toISOString(),
+  }
+];
 
 const DEFAULT_SETTINGS: BusinessSettings = {
   businessName: 'PT Cipta Media Nusantara',
@@ -237,6 +262,9 @@ export async function getDatabase(): Promise<DatabaseSchema> {
       if (!cachedDb!.automationLogs) {
         cachedDb!.automationLogs = [];
       }
+      if (!cachedDb!.adminUsers || cachedDb!.adminUsers.length === 0) {
+        cachedDb!.adminUsers = DEFAULT_ADMIN_USERS;
+      }
       return cachedDb!;
     } catch (e) {
       console.error('Error reading db.json, re-initializing...', e);
@@ -253,6 +281,7 @@ export async function getDatabase(): Promise<DatabaseSchema> {
     automationRules: DEFAULT_AUTOMATION_RULES,
     automationLogs: [],
     remindersLog: [],
+    adminUsers: DEFAULT_ADMIN_USERS,
   };
 
   saveDatabase(cachedDb);

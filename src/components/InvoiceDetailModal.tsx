@@ -15,7 +15,8 @@ import {
   CheckCircle2, 
   Clock, 
   FileSpreadsheet, 
-  Send
+  Send,
+  ExternalLink
 } from 'lucide-react';
 import { Invoice } from '../types';
 import { formatRupiah, formatDateIndo, formatDateTimeIndo, getStatusDetails } from '../utils/formatters';
@@ -27,6 +28,7 @@ interface InvoiceDetailModalProps {
   onPrintInvoice: (invoice: Invoice) => void;
   onSendWhatsApp: (invoice: Invoice) => void;
   onSendEmailReminder: (invoice: Invoice) => void;
+  onOpenPortal?: (invoice: Invoice) => void;
 }
 
 export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
@@ -36,6 +38,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   onPrintInvoice,
   onSendWhatsApp,
   onSendEmailReminder,
+  onOpenPortal,
 }) => {
   const [copiedQris, setCopiedQris] = useState(false);
 
@@ -357,6 +360,17 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
           </button>
 
           <div className="flex items-center gap-2">
+            {onOpenPortal && (
+              <button
+                onClick={() => onOpenPortal(invoice)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition active:scale-95"
+                title="Buka Tampilan Portal Pelanggan untuk Faktur Ini"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Lihat di Portal Pelanggan</span>
+              </button>
+            )}
+
             {!isPaid && (
               <button
                 onClick={() => onSendEmailReminder(invoice)}
