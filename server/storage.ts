@@ -9,7 +9,8 @@ import {
   ServiceItem, 
   BillingAutomationRule, 
   AutomationDispatchLog,
-  AdminUser
+  AdminUser,
+  RecurringAddonService
 } from './types';
 import { convertToDynamicQris, generateQrDataUrl } from './qris';
 
@@ -25,6 +26,7 @@ export interface DatabaseSchema {
   invoices: Invoice[];
   customers: CustomerRecord[];
   services: ServiceItem[];
+  recurringAddons?: RecurringAddonService[];
   automationRules: BillingAutomationRule[];
   automationLogs: AutomationDispatchLog[];
   remindersLog: ReminderLog[];
@@ -54,20 +56,71 @@ export const DEFAULT_ADMIN_USERS: AdminUser[] = [
   }
 ];
 
-const DEFAULT_SETTINGS: BusinessSettings = {
+export const DEFAULT_SETTINGS: BusinessSettings = {
+  appName: 'InvoiceKilat',
+  appLogoUrl: '',
+  appTagline: 'Sistem Faktur & QRIS Dinamis Otomatis',
+
   businessName: 'PT Cipta Media Nusantara',
+  companyLogoUrl: '',
+  businessTagline: 'Solusi Teknologi & Transformasi Digital',
   businessOwner: 'Budi Santoso',
   businessPhone: '6281298765432',
   businessEmail: 'billing@ciptamedia.id',
   businessAddress: 'Jl. Sudirman No. 45 Kav. 8, Senayan, Jakarta Pusat 10270',
+  businessWebsite: 'https://ciptamedia.id',
+  businessTaxId: '01.234.567.8-012.000',
   businessLogoUrl: '',
-  
+
+  bankName: 'BCA (Bank Central Asia)',
+  bankAccountNumber: '8730918231',
+  bankAccountHolder: 'PT Cipta Media Nusantara',
+
+  // Akun Pembayaran Khusus (BCA, BRI, DANA, Gojek)
+  bcaAccountNumber: '8730918231',
+  bcaAccountHolder: 'PT Cipta Media Nusantara / Heruhendri',
+  briAccountNumber: '012301098765501',
+  briAccountHolder: 'PT Cipta Media Nusantara / Heruhendri',
+  danaNumber: '08977345640',
+  danaAccountHolder: 'Heruhendri',
+  gojekNumber: '08977345640',
+  gojekAccountHolder: 'Heruhendri',
+
+  // Watermark Footer Invoice & Aplikasi
+  watermarkText: 'Aplikasi ini dibuat oleh Heru Hendri • Contact Person: 08977345640',
+  showAppWatermark: true,
+  appWatermarkPosition: 'bottom-bar',
+
+  // Otomasi Tagihan Bulanan (Recurring Invoicing)
+  recurringBilling: {
+    enabled: true,
+    generateDay: 1,
+    dateOption: 'system',
+    dueDateOption: 'system',
+    dueDaysOffset: 10,
+    includeVpn: true,
+    includeMonitoring: true,
+    defaultVpnPrice: 50000,
+    defaultMonitoringPrice: 250000,
+    lastGeneratedMonth: '',
+  },
+
+  signatureImageUrl: '',
+  stampImageUrl: '',
+  signatoryName: 'Budi Santoso',
+  signatoryTitle: 'Direktur Utama',
+
+  defaultInvoiceTemplate: 'corporate',
+
   defaultStaticQris: DEFAULT_DANA_STATIC_QRIS,
   qrisMerchantName: 'DANA BISNIS CIPTA MEDIA',
   qrisMerchantCity: 'JAKARTA',
 
+  googleSheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+  googleSheetName: 'InvoiceKilat_Master_Backup',
   googleSheetWebhookUrl: 'https://script.google.com/macros/s/AKfycbz_SAMPLE_APP_SCRIPT_URL_INVOICE_SYNC/exec',
   lastSpreadsheetSync: new Date().toISOString(),
+  autoBackupToSheets: true,
 
   whatsappNotificationEnabled: true,
   whatsappTemplate: 
@@ -86,6 +139,51 @@ const DEFAULT_SETTINGS: BusinessSettings = {
 };
 
 const DEFAULT_SERVICES: ServiceItem[] = [
+  {
+    id: 'srv-vpn-1',
+    name: 'VPN Remote Mikrotik & Cloud Tunnel (L2TP/WireGuard/SSTP)',
+    category: 'Jaringan & VPN',
+    unit: 'Bulan',
+    price: 50000,
+    description: 'Akses remote Winbox dan Webfig router Mikrotik dari luar jaringan secara aman tanpa IP publik statis.',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'srv-mon-1',
+    name: 'Biaya Monitoring Jaringan NOC & Router 24/7',
+    category: 'Monitoring & NOC',
+    unit: 'Bulan',
+    price: 250000,
+    description: 'Monitoring traffic, latensi, uptime router Mikrotik, dan notifikasi alert real-time via WhatsApp/Telegram.',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'srv-vpn-2',
+    name: 'Sewa Port VPN Forwarding & Dedicated IP Publik Dinamis',
+    category: 'Jaringan & VPN',
+    unit: 'Bulan',
+    price: 75000,
+    description: 'Port forwarding dedicated untuk API Mikrotik, billing server, dan web monitoring online 24 jam.',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'srv-mon-2',
+    name: 'Biaya Monitoring Server & Database Realtime 24/7',
+    category: 'Monitoring & NOC',
+    unit: 'Bulan',
+    price: 350000,
+    description: 'Pemantauan performa server, beban CPU/RAM, backup database otomatis, dan laporan kesehatan sistem bulanan.',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'srv-isp-1',
+    name: 'Manajemen Bandwidth & Isolir Otomatis PPPoE ISP',
+    category: 'ISP & PPPoE',
+    unit: 'Bulan',
+    price: 500000,
+    description: 'Pengelolaan antrean bandwidth, pemeliharaan pool IP PPPoE, dan otomatisasi isolir pelanggan jatuh tempo.',
+    createdAt: new Date().toISOString(),
+  },
   {
     id: 'srv-1',
     name: 'Pengembangan Aplikasi Web & Mobile PWA',
@@ -142,7 +240,92 @@ const DEFAULT_SERVICES: ServiceItem[] = [
   },
 ];
 
+export const DEFAULT_RECURRING_ADDONS: RecurringAddonService[] = [
+  {
+    id: 'addon-vpn',
+    name: 'Layanan VPN Remote Mikrotik Dedicated',
+    category: 'Jaringan & VPN',
+    price: 50000,
+    unit: 'Bulan',
+    description: 'Akses remote Winbox & Webfig Mikrotik via port forwarding VPN cloud tunnel 24/7.',
+    enabledByDefault: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'addon-mon',
+    name: 'Biaya Monitoring Jaringan NOC 24/7',
+    category: 'Monitoring & NOC',
+    price: 250000,
+    unit: 'Bulan',
+    description: 'Pemantauan latensi, link router Mikrotik, dan alert insiden otomatis via WhatsApp & Telegram.',
+    enabledByDefault: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'addon-ip-public',
+    name: 'Sewa IP Publik Statis / Cloud Tunnel Dedicated',
+    category: 'Jaringan & VPN',
+    price: 100000,
+    unit: 'Bulan',
+    description: 'Alokasi IP publik statis untuk server local, web portal, atau router Mikrotik utama.',
+    enabledByDefault: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'addon-maintenance',
+    name: 'Jasa Pemeliharaan & Backup Config RouterOS Bulanan',
+    category: 'Maintenance & Support',
+    price: 350000,
+    unit: 'Bulan',
+    description: 'Backup berkala konfigurasi RouterOS, firmware update berkala, dan optimasi firewall.',
+    enabledByDefault: false,
+    createdAt: new Date().toISOString(),
+  },
+];
+
 const DEFAULT_CUSTOMERS: CustomerRecord[] = [
+  {
+    id: 'cust-noc-1',
+    name: 'Heru Pratama (ISP NetNusantara)',
+    company: 'PT Net Nusantara Fiber',
+    email: 'noc@netnusantara.net.id',
+    phone: '6281299887766',
+    address: 'Gedung Cyber 1 Lt. 8, Jl. Kuningan Barat, Jakarta Selatan',
+    notes: 'Klien ISP RTRW Net Mitra - Kontrak Monitoring NOC & Pemeliharaan Mikrotik PPPoE',
+    customerMode: 'noc',
+    recurringEnabled: true,
+    includeVpn: true,
+    includeMonitoring: true,
+    pppoeBillingMethod: 'monthly_average',
+    monthlyAveragePppoeCount: 92,
+    mikrotik: {
+      routerName: 'CCR1009-Core-NetNusa',
+      host: '103.145.22.10',
+      port: 8728,
+      username: 'api-monitoring',
+      ratePerUser: 5000,
+      isolirProfileName: 'isolir',
+      connectionStatus: 'connected',
+      lastSyncedAt: new Date().toISOString(),
+      totalPppoeSecrets: 125,
+      activePppoeCount: 96,
+      nonIsolirCount: 84,
+      isolirCount: 12,
+      systemIdentity: 'CCR1009-Core-NetNusa',
+      rosVersion: 'v7.15.3',
+      boardName: 'CCR1009-7G-1C-1S+',
+      uptime: '18w 4d 11h 45m',
+      samples: [
+        { timestamp: '2026-09-01T08:00:00Z', activeCount: 99, nonIsolirCount: 90, isolirCount: 9 },
+        { timestamp: '2026-09-07T12:00:00Z', activeCount: 104, nonIsolirCount: 94, isolirCount: 10 },
+        { timestamp: '2026-09-14T15:30:00Z', activeCount: 102, nonIsolirCount: 91, isolirCount: 11 },
+        { timestamp: '2026-09-19T20:00:00Z', activeCount: 105, nonIsolirCount: 93, isolirCount: 12 },
+      ],
+      monthlyAverageNonIsolir: 92,
+      preferredBillingMethod: 'monthly_average',
+    },
+    createdAt: new Date().toISOString(),
+  },
   {
     id: 'cust-1',
     name: 'Andi Pratama',
@@ -151,6 +334,7 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     phone: '6281234567890',
     address: 'Jl. Pemuda No. 12, Surabaya',
     notes: 'Klien prioritas jasa software dan integrasi pembayaran',
+    customerMode: 'biasa',
     createdAt: new Date().toISOString(),
   },
   {
@@ -161,6 +345,7 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     phone: '6281398761234',
     address: 'Wisma Mandiri Lt. 14, Jakarta Selatan',
     notes: 'Kontrak sistem QRIS dan WhatsApp gateway',
+    customerMode: 'biasa',
     createdAt: new Date().toISOString(),
   },
   {
@@ -171,6 +356,7 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     phone: '6285712345678',
     address: 'Jl. Riau No. 88, Bandung',
     notes: 'Langganan maintenance bulanan',
+    customerMode: 'biasa',
     createdAt: new Date().toISOString(),
   },
   {
@@ -181,6 +367,7 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     phone: '6281898765432',
     address: 'Jl. Malioboro No. 40, Yogyakarta',
     notes: 'Klien UI/UX design system',
+    customerMode: 'biasa',
     createdAt: new Date().toISOString(),
   },
 ];
@@ -255,6 +442,52 @@ export async function getDatabase(): Promise<DatabaseSchema> {
       }
       if (!cachedDb!.services || cachedDb!.services.length === 0) {
         cachedDb!.services = DEFAULT_SERVICES;
+      } else {
+        // Merge in any newly introduced default services (e.g. VPN, Monitoring) if missing
+        for (const defaultSrv of DEFAULT_SERVICES) {
+          const exists = cachedDb!.services.some(
+            (s) => s.id === defaultSrv.id || s.name.toLowerCase() === defaultSrv.name.toLowerCase()
+          );
+          if (!exists) {
+            cachedDb!.services.push(defaultSrv);
+          }
+        }
+      }
+      if (!cachedDb!.recurringAddons || cachedDb!.recurringAddons.length === 0) {
+        cachedDb!.recurringAddons = DEFAULT_RECURRING_ADDONS;
+      } else {
+        for (const defaultAddon of DEFAULT_RECURRING_ADDONS) {
+          const exists = cachedDb!.recurringAddons.some(
+            (a) => a.id === defaultAddon.id || a.name.toLowerCase() === defaultAddon.name.toLowerCase()
+          );
+          if (!exists) {
+            cachedDb!.recurringAddons.push(defaultAddon);
+          }
+        }
+      }
+
+      // Ensure NOC customer has samples and monthlyAverageNonIsolir initialized
+      for (const cust of cachedDb!.customers) {
+        if (cust.customerMode === 'noc' && cust.mikrotik) {
+          if (!cust.mikrotik.samples || cust.mikrotik.samples.length === 0) {
+            cust.mikrotik.samples = [
+              { timestamp: '2026-09-01T08:00:00Z', activeCount: 99, nonIsolirCount: 90, isolirCount: 9 },
+              { timestamp: '2026-09-07T12:00:00Z', activeCount: 104, nonIsolirCount: 94, isolirCount: 10 },
+              { timestamp: '2026-09-14T15:30:00Z', activeCount: 102, nonIsolirCount: 91, isolirCount: 11 },
+              { timestamp: '2026-09-19T20:00:00Z', activeCount: 105, nonIsolirCount: 93, isolirCount: 12 },
+            ];
+          }
+          if (!cust.mikrotik.monthlyAverageNonIsolir) {
+            const sum = cust.mikrotik.samples.reduce((a, b) => a + b.nonIsolirCount, 0);
+            cust.mikrotik.monthlyAverageNonIsolir = Math.round(sum / cust.mikrotik.samples.length);
+          }
+          if (!cust.pppoeBillingMethod) {
+            cust.pppoeBillingMethod = 'monthly_average';
+          }
+          if (!cust.monthlyAveragePppoeCount) {
+            cust.monthlyAveragePppoeCount = cust.mikrotik.monthlyAverageNonIsolir || 92;
+          }
+        }
       }
       if (!cachedDb!.automationRules || cachedDb!.automationRules.length === 0) {
         cachedDb!.automationRules = DEFAULT_AUTOMATION_RULES;
@@ -265,6 +498,29 @@ export async function getDatabase(): Promise<DatabaseSchema> {
       if (!cachedDb!.adminUsers || cachedDb!.adminUsers.length === 0) {
         cachedDb!.adminUsers = DEFAULT_ADMIN_USERS;
       }
+      if (!cachedDb!.settings) {
+        cachedDb!.settings = DEFAULT_SETTINGS;
+      } else {
+        cachedDb!.settings = {
+          ...DEFAULT_SETTINGS,
+          ...cachedDb!.settings,
+          appName: cachedDb!.settings.appName || DEFAULT_SETTINGS.appName,
+          businessName: cachedDb!.settings.businessName || DEFAULT_SETTINGS.businessName,
+          businessOwner: cachedDb!.settings.businessOwner || DEFAULT_SETTINGS.businessOwner,
+          businessPhone: cachedDb!.settings.businessPhone || DEFAULT_SETTINGS.businessPhone,
+          businessEmail: cachedDb!.settings.businessEmail || DEFAULT_SETTINGS.businessEmail,
+          businessAddress: cachedDb!.settings.businessAddress || DEFAULT_SETTINGS.businessAddress,
+          defaultStaticQris: cachedDb!.settings.defaultStaticQris || DEFAULT_SETTINGS.defaultStaticQris,
+          qrisMerchantName: cachedDb!.settings.qrisMerchantName || DEFAULT_SETTINGS.qrisMerchantName,
+          qrisMerchantCity: cachedDb!.settings.qrisMerchantCity || DEFAULT_SETTINGS.qrisMerchantCity,
+          whatsappTemplate: cachedDb!.settings.whatsappTemplate || DEFAULT_SETTINGS.whatsappTemplate,
+          watermarkText: cachedDb!.settings.watermarkText || 'Aplikasi ini dibuat oleh Heru Hendri • Contact Person: 08977345640',
+          showAppWatermark: cachedDb!.settings.showAppWatermark ?? true,
+          appWatermarkPosition: cachedDb!.settings.appWatermarkPosition || 'bottom-bar',
+          recurringBilling: cachedDb!.settings.recurringBilling || DEFAULT_SETTINGS.recurringBilling,
+        };
+      }
+      saveDatabase(cachedDb!);
       return cachedDb!;
     } catch (e) {
       console.error('Error reading db.json, re-initializing...', e);
@@ -278,6 +534,7 @@ export async function getDatabase(): Promise<DatabaseSchema> {
     invoices: initialInvoices,
     customers: DEFAULT_CUSTOMERS,
     services: DEFAULT_SERVICES,
+    recurringAddons: DEFAULT_RECURRING_ADDONS,
     automationRules: DEFAULT_AUTOMATION_RULES,
     automationLogs: [],
     remindersLog: [],

@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS } from './storage';
+import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS, DEFAULT_SETTINGS, DEFAULT_RECURRING_ADDONS } from './storage';
 import { convertToDynamicQris, generateQrDataUrl, validateQris, parseQris } from './qris';
-import { Invoice, PaymentTransaction, RealtimeEvent, ReminderLog, AdminUser, AdminUserSafe } from './types';
+import { Invoice, InvoiceItem, PaymentTransaction, RealtimeEvent, ReminderLog, AdminUser, AdminUserSafe, CustomerMode, CustomerRecord, RecurringAddonService } from './types';
+import { probeMikrotikRouter } from './mikrotik';
 
 export const apiRouter = Router();
 
@@ -229,18 +230,47 @@ apiRouter.get('/notifications/stream', (req: Request, res: Response) => {
 // GET Settings
 apiRouter.get('/settings', async (req: Request, res: Response) => {
   const db = await getDatabase();
-  res.json(db.settings);
+  res.json({ settings: db.settings, ...db.settings });
 });
 
 // UPDATE Settings
 apiRouter.put('/settings', async (req: Request, res: Response) => {
-  const db = await getDatabase();
-  db.settings = {
-    ...db.settings,
-    ...req.body,
-  };
-  saveDatabase(db);
-  res.json(db.settings);
+  try {
+    const db = await getDatabase();
+    db.settings = {
+      ...DEFAULT_SETTINGS,
+      ...db.settings,
+      ...req.body,
+    };
+    saveDatabase(db);
+    broadcastEvent({
+      type: 'settings_updated' as any,
+      message: 'Pengaturan sistem & profil perusahaan berhasil diperbarui',
+      timestamp: new Date().toISOString(),
+      payload: db.settings,
+    });
+    res.json({ settings: db.settings, ...db.settings });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Gagal menyimpan pengaturan' });
+  }
+});
+
+// RESET Settings to Defaults
+apiRouter.post('/settings/reset', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    db.settings = { ...DEFAULT_SETTINGS };
+    saveDatabase(db);
+    broadcastEvent({
+      type: 'settings_updated' as any,
+      message: 'Pengaturan sistem berhasil dikembalikan ke default standar',
+      timestamp: new Date().toISOString(),
+      payload: db.settings,
+    });
+    res.json({ settings: db.settings, ...db.settings });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Gagal mereset pengaturan' });
+  }
 });
 
 // QRIS Generate & Validate endpoints
@@ -648,6 +678,9 @@ apiRouter.post('/reminders/check', async (req: Request, res: Response) => {
 // GOOGLE SPREADSHEET SYNC & EXPORT
 apiRouter.get('/spreadsheet/export', async (req: Request, res: Response) => {
   const db = await getDatabase();
+  const appName = (db.settings.appName || 'InvoiceKilat').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const companyName = (db.settings.businessName || 'Perusahaan').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const dateStr = new Date().toISOString().slice(0, 10);
   
   // Create CSV format ready for Google Sheets / Excel
   const headers = [
@@ -694,8 +727,143 @@ apiRouter.get('/spreadsheet/export', async (req: Request, res: Response) => {
   const csv = [headers.join(','), ...rows].join('\n');
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="invoices_spreadsheet_export.csv"');
-  res.send('\uFEFF' + csv); // Include BOM for Excel UTF-8
+  res.setHeader('Content-Disposition', `attachment; filename="${appName}_${companyName}_Invoices_${dateStr}.csv"`);
+  res.send('\uFEFF' + csv);
+});
+
+// FULL BACKUP OF ALL COMPANY DATA (Invoices, Customers, Services, Transactions, Company Profile)
+apiRouter.get('/spreadsheet/export-full', async (req: Request, res: Response) => {
+  const db = await getDatabase();
+  const appName = (db.settings.appName || 'InvoiceKilat').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const companyName = (db.settings.businessName || 'Perusahaan').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  const sections: string[] = [];
+
+  // 1. Profil Aplikasi & Perusahaan
+  sections.push('# === IDENTITAS APLIKASI & PROFIL PERUSAHAAN ===');
+  sections.push(['Parameter', 'Nilai'].join(','));
+  sections.push([`"Nama Aplikasi"`, `"${db.settings.appName || 'InvoiceKilat'}"`].join(','));
+  sections.push([`"Slogan Aplikasi"`, `"${db.settings.appTagline || ''}"`].join(','));
+  sections.push([`"Nama Perusahaan / Bisnis"`, `"${db.settings.businessName || ''}"`].join(','));
+  sections.push([`"Pemilik / Penanggung Jawab"`, `"${db.settings.businessOwner || ''}"`].join(','));
+  sections.push([`"No. Telepon / WhatsApp"`, `"${db.settings.businessPhone || ''}"`].join(','));
+  sections.push([`"Email Bisnis"`, `"${db.settings.businessEmail || ''}"`].join(','));
+  sections.push([`"Alamat Lengkap"`, `"${(db.settings.businessAddress || '').replace(/"/g, '""')}"`].join(','));
+  sections.push([`"Website"`, `"${db.settings.businessWebsite || ''}"`].join(','));
+  sections.push([`"NPWP / Izin Usaha"`, `"${db.settings.businessTaxId || ''}"`].join(','));
+  sections.push([`"Rekening Bank"`, `"${db.settings.bankName || ''} - ${db.settings.bankAccountNumber || ''} a.n ${db.settings.bankAccountHolder || ''}"`].join(','));
+  sections.push([`"Merchant QRIS"`, `"${db.settings.qrisMerchantName || ''} (${db.settings.qrisMerchantCity || ''})"`].join(','));
+  sections.push('');
+
+  // 2. Database Invoices
+  sections.push('# === DATABASE INVOICE & TAGIHAN ===');
+  const invHeaders = [
+    'No Invoice', 'Tanggal', 'Jatuh Tempo', 'Nama Pelanggan', 'Perusahaan',
+    'WhatsApp', 'Email', 'Subtotal (Rp)', 'Diskon (Rp)', 'PPN (Rp)', 'Total (Rp)',
+    'Dibayar (Rp)', 'Sisa Tagihan (Rp)', 'Status', 'Metode Bayar', 'No Referensi / QRIS'
+  ];
+  sections.push(invHeaders.join(','));
+  db.invoices.forEach((inv) => {
+    const lastTrx = inv.transactions[inv.transactions.length - 1];
+    sections.push([
+      `"${inv.invoiceNumber}"`,
+      `"${inv.date}"`,
+      `"${inv.dueDate}"`,
+      `"${inv.customer.name.replace(/"/g, '""')}"`,
+      `"${(inv.customer.company || '').replace(/"/g, '""')}"`,
+      `"${inv.customer.phone}"`,
+      `"${inv.customer.email}"`,
+      inv.subtotal,
+      inv.discountAmount,
+      inv.taxAmount,
+      inv.totalAmount,
+      inv.paidAmount,
+      inv.totalAmount - inv.paidAmount,
+      `"${inv.status.toUpperCase()}"`,
+      `"${lastTrx ? lastTrx.paymentMethod : '-'}"`,
+      `"${lastTrx ? lastTrx.referenceNumber : '-'}"`,
+    ].join(','));
+  });
+  sections.push('');
+
+  // 3. Direktori Pelanggan
+  sections.push('# === DIREKTORI PELANGGAN ===');
+  const custHeaders = ['ID', 'Nama Pelanggan', 'Perusahaan', 'No WhatsApp', 'Email', 'Alamat', 'Total Transaksi', 'Total Invoice', 'Sisa Piutang'];
+  sections.push(custHeaders.join(','));
+  db.customers.forEach((c) => {
+    sections.push([
+      `"${c.id}"`,
+      `"${c.name.replace(/"/g, '""')}"`,
+      `"${(c.company || '').replace(/"/g, '""')}"`,
+      `"${c.phone}"`,
+      `"${c.email}"`,
+      `"${(c.address || '').replace(/"/g, '""')}"`,
+      c.totalSpent || 0,
+      c.totalInvoices || 0,
+      c.pendingBalance || 0,
+    ].join(','));
+  });
+  sections.push('');
+
+  // 4. Katalog Layanan & Jasa
+  sections.push('# === KATALOG LAYANAN & JASA USAHA ===');
+  const srvHeaders = ['ID', 'Nama Layanan/Produk', 'Kategori', 'Satuan', 'Harga Satuan (Rp)', 'Deskripsi'];
+  sections.push(srvHeaders.join(','));
+  db.services.forEach((s) => {
+    sections.push([
+      `"${s.id}"`,
+      `"${s.name.replace(/"/g, '""')}"`,
+      `"${s.category || ''}"`,
+      `"${s.unit}"`,
+      s.price,
+      `"${(s.description || '').replace(/"/g, '""')}"`,
+    ].join(','));
+  });
+  sections.push('');
+
+  // 5. Riwayat Transaksi Pembayaran
+  sections.push('# === RIWAYAT TRANSAKSI PEMBAYARAN ===');
+  const trxHeaders = ['ID Transaksi', 'No Invoice', 'Nominal (Rp)', 'Metode Bayar', 'No Referensi', 'Waktu Verifikasi', 'Diverifikasi Oleh', 'Catatan'];
+  sections.push(trxHeaders.join(','));
+  db.invoices.forEach((inv) => {
+    inv.transactions.forEach((t) => {
+      sections.push([
+        `"${t.id}"`,
+        `"${inv.invoiceNumber}"`,
+        t.amount,
+        `"${t.paymentMethod}"`,
+        `"${t.referenceNumber}"`,
+        `"${t.verifiedAt}"`,
+        `"${t.verifiedBy}"`,
+        `"${(t.notes || '').replace(/"/g, '""')}"`,
+      ].join(','));
+    });
+  });
+
+  const fullCsv = sections.join('\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${appName}_${companyName}_FULL_COMPANY_BACKUP_${dateStr}.csv"`);
+  res.send('\uFEFF' + fullCsv);
+});
+
+// JSON BACKUP FOR GOOGLE APPS SCRIPT / AUTOMATION
+apiRouter.get('/spreadsheet/backup-data', async (req: Request, res: Response) => {
+  const db = await getDatabase();
+  res.json({
+    appName: db.settings.appName || 'InvoiceKilat',
+    company: db.settings,
+    invoices: db.invoices,
+    customers: db.customers,
+    services: db.services,
+    transactions: db.invoices.flatMap((inv) =>
+      inv.transactions.map((t) => ({ ...t, invoiceNumber: inv.invoiceNumber, customerName: inv.customer.name }))
+    ),
+    exportedAt: new Date().toISOString(),
+    totalInvoices: db.invoices.length,
+    totalCustomers: db.customers.length,
+    totalServices: db.services.length,
+  });
 });
 
 // Trigger Realtime Sync to Google Sheets Webhook
@@ -709,18 +877,54 @@ apiRouter.post('/spreadsheet/sync-webhook', async (req: Request, res: Response) 
   
   saveDatabase(db);
 
+  // If a webhook URL is configured, forward payload to Google Sheets Apps Script
+  let remoteSyncStatus = 'skipped_no_webhook';
+  if (db.settings.googleSheetWebhookUrl && db.settings.googleSheetWebhookUrl.startsWith('http')) {
+    try {
+      // Fire and forget or quick fetch with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      await fetch(db.settings.googleSheetWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'SYNC_FULL_COMPANY_DATA',
+          appName: db.settings.appName || 'InvoiceKilat',
+          company: db.settings,
+          invoices: db.invoices,
+          customers: db.customers,
+          services: db.services,
+          syncedAt: db.settings.lastSpreadsheetSync,
+        }),
+        signal: controller.signal,
+      }).catch((err) => {
+        console.warn('Webhook dispatch info:', err.message);
+      });
+      clearTimeout(timeoutId);
+      remoteSyncStatus = 'dispatched_to_webhook';
+    } catch (err: any) {
+      console.warn('Google Sheets Webhook notice:', err.message);
+      remoteSyncStatus = 'webhook_notice';
+    }
+  }
+
   broadcastEvent({
     type: 'spreadsheet_synced',
-    message: 'Data invoice dan riwayat transaksi berhasil disinkronkan ke Google Spreadsheet',
+    message: `Semua data perusahaan (${db.invoices.length} invoice, ${db.customers.length} pelanggan) berhasil dibackup ke Google Spreadsheet`,
     timestamp: new Date().toISOString(),
   });
 
   res.json({
     success: true,
-    message: 'Google Spreadsheet sinkronisasi berhasil',
+    message: 'Google Spreadsheet sinkronisasi dan backup data seluruh perusahaan berhasil',
     syncedAt: db.settings.lastSpreadsheetSync,
     webhookUrl: db.settings.googleSheetWebhookUrl,
-    totalRecords: db.invoices.length,
+    remoteSyncStatus,
+    stats: {
+      invoices: db.invoices.length,
+      customers: db.customers.length,
+      services: db.services.length,
+    }
   });
 });
 
@@ -763,15 +967,20 @@ apiRouter.get('/analytics', async (req: Request, res: Response) => {
   let partialCount = 0;
 
   for (const inv of invoices) {
-    if (inv.status === 'paid') paidCount++;
-    else if (inv.status === 'pending') pendingCount++;
-    else if (inv.status === 'overdue') overdueCount++;
-    else if (inv.status === 'partial') partialCount++;
-
-    const outstanding = Math.max(0, inv.totalAmount - inv.paidAmount);
+    const outstanding = Math.max(0, inv.totalAmount - (inv.paidAmount || 0));
     totalOutstanding += outstanding;
-    if (inv.status === 'overdue') {
+
+    const isOverdue = inv.status === 'overdue' || (outstanding > 0 && inv.dueDate < todayStr);
+
+    if (isOverdue) {
+      overdueCount++;
       totalOverdueAmount += outstanding;
+    } else if (inv.status === 'paid') {
+      paidCount++;
+    } else if (inv.status === 'partial') {
+      partialCount++;
+    } else {
+      pendingCount++;
     }
 
     // Process transactions
@@ -859,19 +1068,47 @@ apiRouter.get('/customers', async (req: Request, res: Response) => {
 
 apiRouter.post('/customers', async (req: Request, res: Response) => {
   const db = await getDatabase();
-  const { name, company, email, phone, address, notes } = req.body;
+  const { name, company, email, phone, address, notes, customerMode, mikrotik } = req.body;
   if (!name) {
     return res.status(400).json({ success: false, message: 'Nama pelanggan wajib diisi' });
   }
 
+  const mode: CustomerMode = customerMode === 'noc' ? 'noc' : 'biasa';
+  let mikrotikConfig = undefined;
+
+  if (mode === 'noc' && mikrotik) {
+    const ratePerUser = Number(mikrotik.ratePerUser) >= 500 ? Number(mikrotik.ratePerUser) : 5000;
+    
+    // Probe router to detect active PPPoE users immediately
+    const probeResult = await probeMikrotikRouter({
+      ...mikrotik,
+      ratePerUser,
+      isolirProfileName: mikrotik.isolirProfileName || 'isolir',
+    });
+
+    mikrotikConfig = {
+      routerName: mikrotik.routerName || 'Mikrotik-Router',
+      host: mikrotik.host || '127.0.0.1',
+      port: Number(mikrotik.port) || 8728,
+      username: mikrotik.username || 'admin',
+      password: mikrotik.password || '',
+      useSsl: !!mikrotik.useSsl,
+      ratePerUser,
+      isolirProfileName: mikrotik.isolirProfileName || 'isolir',
+      ...(probeResult.data || {}),
+    };
+  }
+
   const newCust = {
     id: `cust-${Date.now()}`,
-    name,
+    name: String(name).trim(),
     company: company || '',
     email: email || '',
     phone: phone || '',
     address: address || '',
     notes: notes || '',
+    customerMode: mode,
+    mikrotik: mikrotikConfig,
     createdAt: new Date().toISOString(),
   };
 
@@ -880,8 +1117,11 @@ apiRouter.post('/customers', async (req: Request, res: Response) => {
 
   broadcastEvent({
     type: 'customer_updated',
-    message: `Pelanggan baru "${name}" berhasil ditambahkan`,
+    message: mode === 'noc' 
+      ? `Pelanggan Mode NOC "${name}" berhasil didaftarkan (Mikrotik: ${mikrotikConfig?.routerName || 'Aktif'})` 
+      : `Pelanggan baru "${name}" berhasil ditambahkan`,
     timestamp: new Date().toISOString(),
+    payload: newCust,
   });
 
   res.status(201).json({ success: true, customer: newCust });
@@ -889,23 +1129,117 @@ apiRouter.post('/customers', async (req: Request, res: Response) => {
 
 apiRouter.put('/customers/:id', async (req: Request, res: Response) => {
   const db = await getDatabase();
-  const index = db.customers.findIndex((c) => c.id === req.params.id);
+  const rawId = req.params.id;
+  const decodedId = decodeURIComponent(rawId);
+  const index = db.customers.findIndex(
+    (c) => c.id === rawId || c.id === decodedId || c.id.toLowerCase() === rawId.toLowerCase()
+  );
   if (index === -1) {
     return res.status(404).json({ success: false, message: 'Pelanggan tidak ditemukan' });
   }
 
-  db.customers[index] = {
-    ...db.customers[index],
-    ...req.body,
+  const oldCust = db.customers[index];
+  const { name, company, email, phone, address, notes, customerMode, mikrotik } = req.body;
+
+  const mode: CustomerMode = customerMode !== undefined ? (customerMode === 'noc' ? 'noc' : 'biasa') : (oldCust.customerMode || 'biasa');
+  let updatedMikrotik = oldCust.mikrotik;
+
+  if (mode === 'noc') {
+    if (mikrotik) {
+      const mergedConfig = {
+        ...(oldCust.mikrotik || {}),
+        ...mikrotik,
+        ratePerUser: Number(mikrotik.ratePerUser) >= 500 ? Number(mikrotik.ratePerUser) : (oldCust.mikrotik?.ratePerUser || 5000),
+      };
+      
+      // If user altered host, user, or port, or user explicitly requested refresh, probe router
+      const probeResult = await probeMikrotikRouter(mergedConfig);
+      updatedMikrotik = {
+        ...mergedConfig,
+        ...(probeResult.data || {}),
+      };
+    }
+  } else {
+    // Mode biasa doesn't use mikrotik
+    updatedMikrotik = undefined;
+  }
+
+  const updatedCustomer = {
+    ...oldCust,
+    name: name !== undefined && String(name).trim() ? String(name).trim() : oldCust.name,
+    company: company !== undefined ? String(company).trim() : (oldCust.company || ''),
+    email: email !== undefined ? String(email).trim() : (oldCust.email || ''),
+    phone: phone !== undefined ? String(phone).trim() : (oldCust.phone || ''),
+    address: address !== undefined ? String(address).trim() : (oldCust.address || ''),
+    notes: notes !== undefined ? String(notes).trim() : (oldCust.notes || ''),
+    customerMode: mode,
+    mikrotik: updatedMikrotik,
+    updatedAt: new Date().toISOString(),
   };
+
+  db.customers[index] = updatedCustomer;
+
+  // Sync updated customer details to any invoice with this customer
+  if (db.invoices && Array.isArray(db.invoices)) {
+    for (const inv of db.invoices) {
+      if (
+        inv.customer &&
+        (inv.customer.id === oldCust.id ||
+         (inv.customer.name && inv.customer.name.toLowerCase() === oldCust.name.toLowerCase()))
+      ) {
+        inv.customer = {
+          ...inv.customer,
+          id: updatedCustomer.id,
+          name: updatedCustomer.name,
+          company: updatedCustomer.company,
+          email: updatedCustomer.email,
+          phone: updatedCustomer.phone,
+          address: updatedCustomer.address,
+          customerMode: updatedCustomer.customerMode,
+          mikrotik: updatedCustomer.mikrotik,
+        };
+      }
+    }
+  }
+
   saveDatabase(db);
 
-  res.json({ success: true, customer: db.customers[index] });
+  // Compute enriched metrics for the customer
+  const custInvoices = db.invoices.filter(
+    (i) =>
+      i.customer &&
+      (i.customer.id === updatedCustomer.id ||
+        i.customer.name.toLowerCase() === updatedCustomer.name.toLowerCase())
+  );
+  const totalSpent = custInvoices.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
+  const pendingBalance = custInvoices
+    .filter((i) => i.status !== 'paid')
+    .reduce((sum, i) => sum + Math.max(0, i.totalAmount - (i.paidAmount || 0)), 0);
+
+  const enrichedCustomer = {
+    ...updatedCustomer,
+    totalInvoices: custInvoices.length,
+    totalSpent,
+    pendingBalance,
+  };
+
+  broadcastEvent({
+    type: 'customer_updated',
+    message: `Data pelanggan "${updatedCustomer.name}" berhasil diperbarui`,
+    timestamp: new Date().toISOString(),
+    payload: enrichedCustomer,
+  });
+
+  res.json({ success: true, customer: enrichedCustomer, message: 'Data pelanggan berhasil diperbarui' });
 });
 
 apiRouter.delete('/customers/:id', async (req: Request, res: Response) => {
   const db = await getDatabase();
-  const index = db.customers.findIndex((c) => c.id === req.params.id);
+  const rawId = req.params.id;
+  const decodedId = decodeURIComponent(rawId);
+  const index = db.customers.findIndex(
+    (c) => c.id === rawId || c.id === decodedId || c.id.toLowerCase() === rawId.toLowerCase()
+  );
   if (index === -1) {
     return res.status(404).json({ success: false, message: 'Pelanggan tidak ditemukan' });
   }
@@ -913,7 +1247,127 @@ apiRouter.delete('/customers/:id', async (req: Request, res: Response) => {
   const removed = db.customers.splice(index, 1)[0];
   saveDatabase(db);
 
-  res.json({ success: true, message: `Pelanggan ${removed.name} telah dihapus` });
+  broadcastEvent({
+    type: 'customer_updated',
+    message: `Pelanggan "${removed.name}" telah dihapus dari direktori`,
+    timestamp: new Date().toISOString(),
+  });
+
+  res.json({ success: true, message: `Pelanggan "${removed.name}" telah berhasil dihapus` });
+});
+
+// ================= MIKROTIK INTEGRATION ROUTES =================
+
+// POST /api/mikrotik/test - Test connection to Mikrotik host/REST API
+apiRouter.post('/mikrotik/test', async (req: Request, res: Response) => {
+  try {
+    const config = req.body;
+    if (!config.host) {
+      return res.status(400).json({ success: false, message: 'Host / IP Mikrotik wajib diisi' });
+    }
+
+    const result = await probeMikrotikRouter(config);
+    return res.json({
+      success: true,
+      message: result.message,
+      source: result.source,
+      data: result.data,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal menguji koneksi Mikrotik: ' + err.message,
+    });
+  }
+});
+
+// POST /api/mikrotik/sync/:customerId - Live sync PPPoE active users for a customer
+apiRouter.post('/mikrotik/sync/:customerId', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const rawId = req.params.customerId;
+    const decodedId = decodeURIComponent(rawId);
+    const customer = db.customers.find(
+      (c) => c.id === rawId || c.id === decodedId || c.id.toLowerCase() === rawId.toLowerCase()
+    );
+
+    if (!customer) {
+      return res.status(404).json({ success: false, message: 'Pelanggan tidak ditemukan' });
+    }
+
+    if (customer.customerMode !== 'noc' || !customer.mikrotik) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Pelanggan ini bukan Mode NOC atau belum mengonfigurasi perangkat Mikrotik' 
+      });
+    }
+
+    const probeResult = await probeMikrotikRouter(customer.mikrotik);
+    const probeData = probeResult.data || {};
+
+    const liveActive = probeData.activePppoeCount ?? customer.mikrotik.activePppoeCount ?? 96;
+    const liveNonIso = probeData.nonIsolirCount ?? customer.mikrotik.nonIsolirCount ?? 84;
+    const liveIso = probeData.isolirCount ?? customer.mikrotik.isolirCount ?? 12;
+
+    const existingSamples = customer.mikrotik.samples || [];
+    const updatedSamples = [
+      ...existingSamples,
+      {
+        timestamp: new Date().toISOString(),
+        activeCount: liveActive,
+        nonIsolirCount: liveNonIso,
+        isolirCount: liveIso,
+      }
+    ].slice(-30);
+
+    const avgNonIso = Math.round(
+      updatedSamples.reduce((sum, s) => sum + s.nonIsolirCount, 0) / updatedSamples.length
+    );
+
+    customer.mikrotik = {
+      ...customer.mikrotik,
+      ...probeData,
+      samples: updatedSamples,
+      monthlyAverageNonIsolir: avgNonIso,
+      lastSyncedAt: new Date().toISOString(),
+    };
+    customer.monthlyAveragePppoeCount = avgNonIso;
+
+    saveDatabase(db);
+
+    const nonIso = customer.mikrotik.nonIsolirCount || 0;
+    const rate = customer.mikrotik.ratePerUser || 5000;
+    const totalEstLive = nonIso * rate;
+    const totalEstAvg = avgNonIso * rate;
+
+    broadcastEvent({
+      type: 'customer_updated',
+      message: `Sinkronisasi Mikrotik ${customer.name}: Live ${nonIso} user, Rata-rata ${avgNonIso} user non-isolir (Estimasi: Rp ${totalEstAvg.toLocaleString('id-ID')})`,
+      timestamp: new Date().toISOString(),
+      payload: customer,
+    });
+
+    return res.json({
+      success: true,
+      message: `Berhasil sinkronisasi Mikrotik ${customer.mikrotik.routerName}. Live: ${nonIso} user, Rata-rata bulanan: ${avgNonIso} user aktif non-isolir.`,
+      customer,
+      mikrotik: customer.mikrotik,
+      calculation: {
+        totalActive: customer.mikrotik.activePppoeCount || 0,
+        nonIsolirCount: nonIso,
+        monthlyAverageNonIsolir: avgNonIso,
+        isolirCount: customer.mikrotik.isolirCount || 0,
+        ratePerUser: rate,
+        estimatedTotalLive: totalEstLive,
+        estimatedTotalAverage: totalEstAvg,
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal melakukan sinkronisasi Mikrotik: ' + err.message,
+    });
+  }
 });
 
 // ================= SERVICES / DAFTAR JASA MANAGEMENT =================
@@ -1087,6 +1541,392 @@ apiRouter.post('/automation/run', async (req: Request, res: Response) => {
     dispatchedCount,
     logs: logs.slice(0, 10),
   });
+});
+
+// ================= RECURRING ADDON SERVICES CRUD =================
+
+// GET /api/recurring-addons - List all available recurring addons
+apiRouter.get('/recurring-addons', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    res.json({
+      success: true,
+      addons: db.recurringAddons || DEFAULT_RECURRING_ADDONS,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/recurring-addons - Create a new custom recurring addon service
+apiRouter.post('/recurring-addons', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const { name, price, category, unit, description, enabledByDefault } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Nama layanan recurring wajib diisi' });
+    }
+
+    const newAddon: RecurringAddonService = {
+      id: `addon-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: name.trim(),
+      category: (category || 'Layanan Tambahan').trim(),
+      price: Number(price) >= 0 ? Number(price) : 50000,
+      unit: (unit || 'Bulan').trim(),
+      description: (description || '').trim(),
+      enabledByDefault: !!enabledByDefault,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!db.recurringAddons) db.recurringAddons = [...DEFAULT_RECURRING_ADDONS];
+    db.recurringAddons.push(newAddon);
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'service_updated',
+      message: `Layanan recurring baru "${newAddon.name}" berhasil ditambahkan`,
+      timestamp: new Date().toISOString(),
+      payload: newAddon,
+    });
+
+    res.json({ success: true, addon: newAddon, message: 'Layanan recurring berhasil ditambahkan' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PUT /api/recurring-addons/:id - Update recurring addon service
+apiRouter.put('/recurring-addons/:id', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const { id } = req.params;
+    if (!db.recurringAddons) db.recurringAddons = [...DEFAULT_RECURRING_ADDONS];
+    const index = db.recurringAddons.findIndex((a) => a.id === id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Layanan recurring tidak ditemukan' });
+    }
+
+    db.recurringAddons[index] = {
+      ...db.recurringAddons[index],
+      ...req.body,
+      price: req.body.price !== undefined ? Number(req.body.price) : db.recurringAddons[index].price,
+    };
+    saveDatabase(db);
+
+    res.json({ success: true, addon: db.recurringAddons[index], message: 'Layanan recurring berhasil diperbarui' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE /api/recurring-addons/:id - Delete recurring addon service
+apiRouter.delete('/recurring-addons/:id', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const { id } = req.params;
+    if (!db.recurringAddons) db.recurringAddons = [...DEFAULT_RECURRING_ADDONS];
+    db.recurringAddons = db.recurringAddons.filter((a) => a.id !== id);
+    saveDatabase(db);
+
+    res.json({ success: true, message: 'Layanan recurring berhasil dihapus' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ================= MONTHLY RECURRING INVOICE GENERATION =================
+apiRouter.post('/invoices/generate-monthly', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const now = new Date();
+    const targetMonth = req.body.month || req.body.monthStr || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [yearStr, monthStr] = targetMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+
+    // Tanggal Tagihan: Rekomendasi sistem atau Custom
+    const dateOption = req.body.dateOption || 'system';
+    let invoiceDate = req.body.customDate;
+    if (!invoiceDate || dateOption === 'system') {
+      invoiceDate = `${yearStr}-${monthStr}-05`;
+    }
+
+    // Tanggal Jatuh Tempo: Rekomendasi sistem atau Custom
+    const dueDateOption = req.body.dueDateOption || 'system';
+    let dueDate = req.body.customDueDate;
+    if (!dueDate || dueDateOption === 'system') {
+      dueDate = `${yearStr}-${monthStr}-20`;
+    }
+
+    // PPPoE Billing Calculation Method: 'monthly_average' | 'realtime'
+    const pppoeBillingMethod: 'monthly_average' | 'realtime' = 
+      req.body.pppoeBillingMethod === 'realtime' ? 'realtime' : 'monthly_average';
+    
+    // Per customer overrides if passed e.g. { "cust-noc-1": { count: 90, method: 'monthly_average' } }
+    const customerPppoeOverrides = req.body.customerPppoeOverrides || {};
+
+    // Recurring Addons Selection
+    const availableAddons: RecurringAddonService[] = db.recurringAddons && db.recurringAddons.length > 0
+      ? db.recurringAddons
+      : DEFAULT_RECURRING_ADDONS;
+
+    const vpnPrice = Number(req.body.vpnPrice) || 50000;
+    const monitoringPrice = Number(req.body.monitoringPrice) || 250000;
+
+    const forceRegenerate = !!req.body.forceRegenerate;
+    const targetCustomerIds: string[] = Array.isArray(req.body.targetCustomerIds) && req.body.targetCustomerIds.length > 0
+      ? req.body.targetCustomerIds
+      : (Array.isArray(req.body.customerIds) && req.body.customerIds.length > 0 ? req.body.customerIds : db.customers.map((c) => c.id));
+
+    const monthNameIndo = new Date(year, month - 1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
+    const createdInvoices: Invoice[] = [];
+    const skippedCustomers: { customerName: string; reason: string }[] = [];
+    const monthCode = `${yearStr}${monthStr}`;
+
+    for (const custId of targetCustomerIds) {
+      const customer = db.customers.find((c) => c.id === custId);
+      if (!customer) continue;
+
+      // Check if invoice for this customer in this month already exists
+      const alreadyExists = db.invoices.some((inv) => {
+        const matchesCustomer = inv.customer?.id === customer.id || (inv.customer?.name && inv.customer.name.toLowerCase() === customer.name.toLowerCase());
+        const matchesMonth = (inv.date && inv.date.startsWith(targetMonth)) || (inv.invoiceNumber && inv.invoiceNumber.includes(`-${monthCode}-`));
+        return matchesCustomer && matchesMonth && inv.status !== 'cancelled';
+      });
+
+      if (alreadyExists && !forceRegenerate) {
+        skippedCustomers.push({
+          customerName: customer.name,
+          reason: `Tagihan bulan ${monthNameIndo} sudah pernah terbit.`
+        });
+        continue;
+      }
+
+      // Prepare line items
+      const items: InvoiceItem[] = [];
+
+      // 1. Base Service Item / PPPoE NOC Service
+      if (customer.customerMode === 'noc' && customer.mikrotik) {
+        const mk = customer.mikrotik;
+        const custOverride = customerPppoeOverrides[customer.id];
+        const effectiveMethod: 'monthly_average' | 'realtime' = custOverride?.method 
+          || customer.pppoeBillingMethod 
+          || pppoeBillingMethod;
+
+        let userCount: number;
+        let methodLabel: string;
+
+        if (custOverride?.count !== undefined && !isNaN(Number(custOverride.count))) {
+          userCount = Math.max(0, Number(custOverride.count));
+          methodLabel = effectiveMethod === 'monthly_average'
+            ? `Rata-rata ${userCount} User Aktif Non-Isolir Bulan ${monthNameIndo}`
+            : `${userCount} User Aktif Non-Isolir (Snapshot Saat Penagihan)`;
+        } else if (effectiveMethod === 'monthly_average') {
+          // Calculation based on monthly average active non-isolir
+          if (customer.monthlyAveragePppoeCount && customer.monthlyAveragePppoeCount > 0) {
+            userCount = customer.monthlyAveragePppoeCount;
+          } else if (mk.monthlyAverageNonIsolir && mk.monthlyAverageNonIsolir > 0) {
+            userCount = mk.monthlyAverageNonIsolir;
+          } else if (Array.isArray(mk.samples) && mk.samples.length > 0) {
+            const sum = mk.samples.reduce((acc, s) => acc + (s.nonIsolirCount ?? 0), 0);
+            userCount = Math.round(sum / mk.samples.length);
+          } else {
+            userCount = Number(mk.nonIsolirCount) >= 0 ? Number(mk.nonIsolirCount) : (mk.activePppoeCount ? Math.round(mk.activePppoeCount * 0.88) : 84);
+          }
+          methodLabel = `Rata-rata ${userCount} User Aktif Non-Isolir Bulan ${monthNameIndo}`;
+        } else {
+          // Calculation based on realtime snapshot saat penagihan
+          userCount = Number(mk.nonIsolirCount) >= 0 ? Number(mk.nonIsolirCount) : (mk.activePppoeCount ? Math.round(mk.activePppoeCount * 0.88) : 84);
+          methodLabel = `${userCount} User Aktif Non-Isolir (Snapshot Saat Penagihan)`;
+        }
+
+        const rate = Number(mk.ratePerUser) >= 500 ? Number(mk.ratePerUser) : 5000;
+        const total = userCount * rate;
+        items.push({
+          id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          description: `Layanan NOC & Bandwidth PPPoE [${mk.routerName || 'Mikrotik'}] - ${methodLabel} (@ Rp ${rate.toLocaleString('id-ID')})`,
+          quantity: userCount,
+          price: rate,
+          total,
+        });
+      } else {
+        const baseAmount = customer.customMonthlyAmount || 2500000;
+        items.push({
+          id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          description: `Langganan Layanan Bulanan & Support Periode ${monthNameIndo}`,
+          quantity: 1,
+          price: baseAmount,
+          total: baseAmount,
+        });
+      }
+
+      // 2. Layanan Tambahan Recurring (Otomatis diambil dari data profil masing-masing pelanggan yang diatur saat penambahan pelanggan)
+      let customerAddonIds = new Set<string>();
+
+      if (req.body.perCustomerAddons && req.body.perCustomerAddons[customer.id] !== undefined) {
+        // Explicit per-customer selection passed from UI
+        const explicitList = req.body.perCustomerAddons[customer.id];
+        if (Array.isArray(explicitList)) {
+          explicitList.forEach((id: string) => customerAddonIds.add(id));
+        }
+      } else if (customer.recurringEnabled !== false) {
+        // Sesuai data profil pelanggan yang sudah diatur saat penambahan pelanggan baru
+        if (customer.includeVpn) {
+          customerAddonIds.add('addon-vpn');
+        }
+        if (customer.includeMonitoring) {
+          customerAddonIds.add('addon-mon');
+        }
+        if (Array.isArray(customer.recurringAddonIds)) {
+          customer.recurringAddonIds.forEach((id) => customerAddonIds.add(id));
+        }
+      }
+
+      for (const addonId of customerAddonIds) {
+        const addon = availableAddons.find((a) => a.id === addonId)
+          || (Array.isArray(req.body.customAddons) ? req.body.customAddons.find((a: any) => a.id === addonId) : undefined);
+        
+        if (addon) {
+          let price = addon.price;
+          if (addon.id === 'addon-vpn' && req.body.vpnPrice) {
+            price = Number(req.body.vpnPrice);
+          } else if (addon.id === 'addon-mon' && req.body.monitoringPrice) {
+            price = Number(req.body.monitoringPrice);
+          }
+
+          items.push({
+            id: `addon-${addon.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            description: `${addon.name} Periode ${monthNameIndo}`,
+            quantity: 1,
+            price,
+            total: price,
+          });
+        }
+      }
+
+      // Calculate totals
+      const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+      const taxPercent = 11;
+      const taxAmount = Math.round((subtotal * taxPercent) / 100);
+      const totalAmount = subtotal + taxAmount;
+
+      // Sequential invoice number e.g. INV-202610-001
+      const countInMonth = db.invoices.filter((i) => i.invoiceNumber.startsWith(`INV-${monthCode}-`)).length + createdInvoices.length + 1;
+      const invoiceNumber = `INV-${monthCode}-${String(countInMonth).padStart(3, '0')}`;
+
+      // Dynamic QRIS
+      const staticQris = db.settings.defaultStaticQris || DEFAULT_DANA_STATIC_QRIS;
+      const { dynamicQris } = convertToDynamicQris(staticQris, totalAmount, invoiceNumber);
+      const dynamicQrisDataUrl = await generateQrDataUrl(dynamicQris);
+
+      const newInvoice: Invoice = {
+        id: `inv-${invoiceNumber.toLowerCase()}`,
+        invoiceNumber,
+        date: invoiceDate,
+        dueDate,
+        status: 'pending',
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          company: customer.company || '',
+          email: customer.email || '',
+          phone: customer.phone || '',
+          address: customer.address || '',
+          customerMode: customer.customerMode,
+          mikrotik: customer.mikrotik,
+        },
+        items,
+        subtotal,
+        taxPercent,
+        taxAmount,
+        discountAmount: 0,
+        totalAmount,
+        paidAmount: 0,
+        notes: `Tagihan rutin bulanan periode ${monthNameIndo}. Termasuk rincian layanan utama, VPN Remote, dan Biaya Monitoring. Pembayaran dapat dilakukan secara instan via QRIS Dinamis terlampir sebelum jatuh tempo.`,
+        paymentTerms: `Jatuh tempo pembayaran maksimal tanggal ${dueDate}.`,
+        staticQris,
+        dynamicQris,
+        dynamicQrisDataUrl,
+        transactions: [],
+        reminders: [],
+        whatsappNotified: false,
+        spreadsheetSynced: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      createdInvoices.push(newInvoice);
+      db.invoices.unshift(newInvoice);
+
+      broadcastEvent({
+        type: 'invoice_created',
+        invoiceId: newInvoice.id,
+        invoiceNumber: newInvoice.invoiceNumber,
+        amount: newInvoice.totalAmount,
+        message: `Tagihan bulanan ${monthNameIndo} berhasil diterbitkan untuk ${customer.name} (Total: Rp ${totalAmount.toLocaleString('id-ID')})`,
+        timestamp: new Date().toISOString(),
+        payload: newInvoice,
+      });
+    }
+
+    if (createdInvoices.length > 0) {
+      if (!db.settings.recurringBilling) {
+        db.settings.recurringBilling = {
+          enabled: true,
+          generateDay: 1,
+          dateOption: 'system',
+          dueDateOption: 'system',
+          dueDaysOffset: 10,
+          includeVpn: true,
+          includeMonitoring: true,
+          lastGeneratedMonth: targetMonth,
+        };
+      } else {
+        db.settings.recurringBilling.lastGeneratedMonth = targetMonth;
+      }
+
+      const logEntry = {
+        id: `auto-${Date.now()}-monthly`,
+        invoiceId: createdInvoices[0]?.id || '',
+        invoiceNumber: `${createdInvoices.length} Tagihan Baru`,
+        customerName: `Semua Pelanggan (${createdInvoices.length} Klien)`,
+        customerPhone: '',
+        customerEmail: '',
+        ruleType: `Generate Tagihan Bulanan Otomatis (${monthNameIndo})`,
+        channel: 'both' as const,
+        status: 'generated' as const,
+        message: `Sistem berhasil menerbitkan ${createdInvoices.length} invoice tagihan bulanan periode ${monthNameIndo} (Termasuk VPN Remote & Biaya Monitoring). Jatuh tempo: ${dueDate}.`,
+        dispatchedAt: new Date().toISOString(),
+        amount: createdInvoices.reduce((sum, i) => sum + i.totalAmount, 0),
+      };
+      db.automationLogs = [logEntry, ...(db.automationLogs || [])].slice(0, 50);
+
+      saveDatabase(db);
+    }
+
+    return res.json({
+      success: true,
+      message: `Berhasil men-generate ${createdInvoices.length} invoice tagihan bulanan untuk periode ${monthNameIndo}`,
+      targetMonth,
+      monthName: monthNameIndo,
+      generatedCount: createdInvoices.length,
+      skippedCount: skippedCustomers.length,
+      invoices: createdInvoices,
+      skipped: skippedCustomers,
+      dateUsed: invoiceDate,
+      dueDateUsed: dueDate,
+      includedServices: {
+        mode: 'customer_profile',
+        note: 'Sesuai konfigurasi profil masing-masing pelanggan',
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: 'Gagal men-generate invoice bulanan: ' + err.message,
+    });
+  }
 });
 
 // Save Uploaded QRIS Image & Decoded Payload

@@ -19,7 +19,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { Invoice } from '../types';
-import { formatRupiah, formatDateIndo, formatDateTimeIndo, getStatusDetails } from '../utils/formatters';
+import { formatRupiah, formatDateIndo, formatDateTimeIndo, getStatusDetails, getPaymentMethodDetails } from '../utils/formatters';
 
 interface InvoiceDetailModalProps {
   invoice: Invoice | null;
@@ -313,9 +313,14 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
                           <span className="font-bold text-slate-900">
                             {formatRupiah(trx.amount)}
                           </span>
-                          <span className="rounded-md bg-emerald-200 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 uppercase">
-                            {trx.paymentMethod.replace('_', ' ')}
-                          </span>
+                          {(() => {
+                            const methodInfo = getPaymentMethodDetails(trx.paymentMethod);
+                            return (
+                              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${methodInfo.badgeClass}`}>
+                                {methodInfo.label}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <p className="text-[11px] text-slate-500">
                           Ref: <span className="font-mono">{trx.referenceNumber}</span> • {formatDateTimeIndo(trx.verifiedAt)}
@@ -338,14 +343,19 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
           </div>
 
           {/* Sync & Automation Status Footer */}
-          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-1.5">
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Google Sheets Sync: <strong className="text-slate-800">{invoice.spreadsheetSynced ? 'Terhubung (Realtime)' : 'Menunggu Sync'}</strong></span>
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-1.5">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <span>Google Sheets: <strong className="text-slate-800">{invoice.spreadsheetSynced ? 'Terhubung' : 'Pending'}</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Share2 className="w-4 h-4 text-emerald-600" />
+                <span>WhatsApp: <strong className="text-slate-800">{invoice.whatsappNotified ? 'Terkirim' : 'Belum'}</strong></span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Share2 className="w-4 h-4 text-emerald-600" />
-              <span>Notifikasi WhatsApp: <strong className="text-slate-800">{invoice.whatsappNotified ? 'Terkirim' : 'Belum'}</strong></span>
+            <div className="text-[11px] font-medium text-slate-400">
+              Dibuat oleh heruhendri • Contact Person: 08977345640
             </div>
           </div>
         </div>

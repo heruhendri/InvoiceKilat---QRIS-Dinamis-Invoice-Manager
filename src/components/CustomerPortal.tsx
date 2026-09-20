@@ -10,7 +10,6 @@ import {
   Copy, 
   Check, 
   Share2, 
-  ArrowLeft, 
   Printer, 
   Phone, 
   Mail, 
@@ -19,13 +18,18 @@ import {
   ExternalLink,
   Wallet,
   Calendar,
-  Lock,
-  Link2
+  Link2,
+  Sparkles,
+  CreditCard,
+  MessageCircle,
+  HelpCircle,
+  Receipt
 } from 'lucide-react';
-import { Invoice } from '../types';
+import { Invoice, BusinessSettings } from '../types';
 import { formatRupiah, formatDateIndo, formatDateTimeIndo, getStatusDetails } from '../utils/formatters';
 
 interface CustomerPortalProps {
+  settings?: BusinessSettings | null;
   initialSearchQuery?: string;
   initialInvoiceNumber?: string;
   onBackToAdmin?: () => void;
@@ -34,9 +38,9 @@ interface CustomerPortalProps {
 }
 
 export const CustomerPortal: React.FC<CustomerPortalProps> = ({
+  settings,
   initialSearchQuery = '',
   initialInvoiceNumber = '',
-  onBackToAdmin,
   onSelectInvoiceForPrint,
   isStandalone = false,
 }) => {
@@ -54,7 +58,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   // Selected invoice for detail view
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
   const [copiedQris, setCopiedQris] = useState(false);
+  const [copiedBank, setCopiedBank] = useState(false);
   const [activeTabFilter, setActiveTabFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const appName = settings?.appName || 'InvoiceKilat';
+  const companyName = settings?.businessName || 'PT Cipta Media Nusantara';
+  const logoUrl = settings?.companyLogoUrl || settings?.appLogoUrl;
+  const supportPhone = settings?.businessPhone || '6281298765432';
 
   const executeSearch = async (searchParam: string) => {
     const trimmed = searchParam.trim();
@@ -69,7 +80,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     setActiveInvoice(null);
 
     try {
-      // 1. If it looks like an invoice number (starts with INV or contains dash)
+      // 1. If it looks like an invoice number
       if (trimmed.toUpperCase().startsWith('INV-')) {
         const invRes = await fetch(`/api/portal/invoice/${encodeURIComponent(trimmed)}`);
         const invData = await invRes.json();
@@ -101,10 +112,13 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
         setInvoices(data.invoices || []);
         setBusiness(data.business);
 
-        // If specific invoice number was provided, set it as active
         if (initialInvoiceNumber) {
           const matched = (data.invoices || []).find((i: Invoice) => i.invoiceNumber === initialInvoiceNumber);
           if (matched) setActiveInvoice(matched);
+        } else if (data.invoices && data.invoices.length > 0) {
+          // Default to first invoice or first unpaid invoice
+          const firstUnpaid = data.invoices.find((i: Invoice) => i.status !== 'paid');
+          setActiveInvoice(firstUnpaid || data.invoices[0]);
         }
       } else {
         setCustomer(null);
@@ -137,6 +151,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     setTimeout(() => setCopiedQris(false), 2000);
   };
 
+  const handleCopyBankAcc = (accNumber: string) => {
+    navigator.clipboard.writeText(accNumber);
+    setCopiedBank(true);
+    setTimeout(() => setCopiedBank(false), 2000);
+  };
+
   const handleDownloadQr = (inv: Invoice) => {
     if (!inv.dynamicQrisDataUrl) return;
     const link = document.createElement('a');
@@ -153,142 +173,182 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     return true;
   });
 
-  const [copiedLink, setCopiedLink] = useState(false);
-
   const handleCopyPortalLink = () => {
-    const origin = window.location.origin;
-    const shareUrl = `${origin}/#/portal${query ? `?q=${encodeURIComponent(query)}` : ''}`;
-    navigator.clipboard.writeText(shareUrl);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+    try {
+      const origin = window.location.origin;
+      const shareUrl = `${origin}/#/portal${query ? `?q=${encodeURIComponent(query)}` : ''}`;
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(shareUrl).catch(() => {});
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      // safe fallback
+    }
   };
 
+  // WhatsApp Support Link
+  const cleanPhone = supportPhone.replace(/[^0-9]/g, '');
+  const waSupportUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+    `Halo ${companyName}, saya ingin menanyakan mengenai tagihan faktur saya melalui portal pelanggan.`
+  )}`;
+
   return (
-    <div className="space-y-6 pb-16 animate-in fade-in duration-300">
+    <div className="space-y-6 pb-20 animate-in fade-in duration-300 max-w-7xl mx-auto px-2 sm:px-4">
       {/* Top Banner & Search Section */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-950 p-6 sm:p-8 text-white shadow-2xl border border-emerald-900/30">
-        <div className="relative z-10 max-w-2xl">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              Portal Khusus Pelanggan
-            </span>
-
-            <button
-              onClick={handleCopyPortalLink}
-              className="text-xs text-slate-300 hover:text-white flex items-center gap-1 bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition"
-              title="Salin Tautan Portal Ini untuk Dibagikan"
-            >
-              {copiedLink ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-300">Tautan Tersalin!</span>
-                </>
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 sm:p-10 text-white shadow-2xl border border-slate-800">
+        <div className="relative z-10">
+          {/* Top Bar inside banner */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              {logoUrl ? (
+                <div className="w-11 h-11 rounded-2xl bg-white p-1 border border-white/20 shadow-xs flex items-center justify-center shrink-0">
+                  <img src={logoUrl} alt={companyName} className="max-h-full max-w-full object-contain" />
+                </div>
               ) : (
-                <>
-                  <Link2 className="w-3.5 h-3.5" />
-                  <span>Salin Tautan Portal</span>
-                </>
+                <div className="w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-lg shadow-xs shrink-0">
+                  {companyName.substring(0, 2).toUpperCase()}
+                </div>
               )}
-            </button>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-extrabold text-sm sm:text-base text-white tracking-tight">
+                    {companyName}
+                  </h2>
+                  <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-extrabold border border-emerald-500/30">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    Verified QRIS Merchant
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {settings?.businessTagline || 'Portal Resmi Cek & Pembayaran Faktur Pelanggan'}
+                </p>
+              </div>
+            </div>
 
-            {onBackToAdmin && (
+            {/* Quick Actions (Share Portal & WhatsApp CS) */}
+            <div className="flex items-center gap-2">
               <button
-                onClick={onBackToAdmin}
-                className="text-xs text-slate-300 hover:text-white flex items-center gap-1 ml-auto bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition"
+                onClick={handleCopyPortalLink}
+                className="text-xs text-slate-300 hover:text-white flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3.5 py-2 rounded-xl transition border border-white/10"
+                title="Salin Tautan Portal Ini"
               >
-                <Lock className="w-3.5 h-3.5 text-blue-400" />
-                <span>Kembali ke Portal Admin</span>
+                {copiedLink ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-300 font-bold">Tautan Tersalin!</span>
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span>Salin Tautan</span>
+                  </>
+                )}
               </button>
-            )}
+
+              <a
+                href={waSupportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-white font-bold flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 rounded-xl transition shadow-md shadow-emerald-600/20"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                <span>Bantuan WhatsApp</span>
+              </a>
+            </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-            Cek & Bayar Tagihan Anda
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-            Periksa status faktur, rincian pembayaran, dan bayar seketika dengan pemindaian <strong>QRIS Dinamis</strong> (nominal sudah otomatis terisi dan terkunci).
-          </p>
+          <div className="max-w-2xl">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-extrabold uppercase tracking-wider mb-2">
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              Portal Mandiri Pelanggan
+            </span>
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight mt-1">
+              Cek & Bayar Tagihan Anda
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
+              Cukup masukkan nomor WhatsApp atau nomor faktur untuk memeriksa rincian invoice dan bayar seketika dengan <strong>QRIS Dinamis</strong> (nominal terkunci otomatis).
+            </p>
 
-          {/* Search Bar Input */}
-          <form 
-            onSubmit={(e) => {
-              e.preventDefault();
-              executeSearch(query);
-            }} 
-            className="mt-6 flex flex-col sm:flex-row gap-2"
-          >
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                id="portal-search-input"
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ketik No. WhatsApp (contoh: 08123456789) atau No. Invoice..."
-                className="w-full pl-11 pr-4 py-3 text-xs sm:text-sm rounded-2xl border border-white/20 bg-white/10 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 backdrop-blur-md"
-              />
+            {/* Search Bar Input */}
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                executeSearch(query);
+              }} 
+              className="mt-6 flex flex-col sm:flex-row gap-2.5"
+            >
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  id="portal-search-input"
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Ketik No. WhatsApp (contoh: 08123456789) atau No. Invoice..."
+                  className="w-full pl-11 pr-4 py-3 text-xs sm:text-sm rounded-2xl border border-white/20 bg-white/10 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 backdrop-blur-md font-medium"
+                />
+              </div>
+              <button
+                id="portal-search-submit-btn"
+                type="submit"
+                disabled={isLoading}
+                className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-blue-500/30 transition active:scale-95 disabled:opacity-50 shrink-0 flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Mencari...</span>
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+                    <span>Lihat Tagihan</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Quick hint buttons */}
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+              <span className="font-semibold text-slate-300">Pencarian cepat:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('081234567890');
+                  executeSearch('081234567890');
+                }}
+                className="bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md text-white font-mono transition"
+              >
+                081234567890
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('081398761234');
+                  executeSearch('081398761234');
+                }}
+                className="bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md text-white font-mono transition"
+              >
+                081398761234
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('INV-2026-001');
+                  executeSearch('INV-2026-001');
+                }}
+                className="bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md text-white font-mono transition"
+              >
+                INV-2026-001
+              </button>
             </div>
-            <button
-              id="portal-search-submit-btn"
-              type="submit"
-              disabled={isLoading}
-              className="px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-500/30 transition active:scale-95 disabled:opacity-50 shrink-0 flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Mencari...</span>
-                </>
-              ) : (
-                <>
-                  <Search className="w-4 h-4" />
-                  <span>Lihat Tagihan</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Quick hint buttons */}
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-            <span>Contoh pencarian:</span>
-            <button
-              type="button"
-              onClick={() => {
-                setQuery('081234567890');
-                executeSearch('081234567890');
-              }}
-              className="underline hover:text-white"
-            >
-              081234567890 (Andi)
-            </button>
-            <span>•</span>
-            <button
-              type="button"
-              onClick={() => {
-                setQuery('081398761234');
-                executeSearch('081398761234');
-              }}
-              className="underline hover:text-white"
-            >
-              081398761234 (Siti)
-            </button>
-            <span>•</span>
-            <button
-              type="button"
-              onClick={() => {
-                setQuery('INV-2026-001');
-                executeSearch('INV-2026-001');
-              }}
-              className="underline hover:text-white"
-            >
-              INV-2026-001
-            </button>
           </div>
         </div>
 
         {/* Decorative background glow */}
-        <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-600/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute right-40 -bottom-20 w-60 h-60 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
       </div>
 
       {/* Error / Not Found Alert */}
@@ -344,11 +404,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               </div>
             </div>
 
-            {business && (
-              <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-400">
-                Diterbitkan oleh: <strong className="text-slate-700">{business.name}</strong>
-              </div>
-            )}
+            <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
+              <span>Diterbitkan oleh:</span>
+              <strong className="text-slate-800">{companyName}</strong>
+            </div>
           </div>
 
           {/* Outstanding / Total Summary Card */}
@@ -360,46 +419,46 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   Ringkasan Tagihan Anda
                 </span>
               </div>
-              <span className="text-xs font-semibold text-slate-500">
+              <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full">
                 {stats?.totalInvoices || 0} Faktur
               </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 my-4">
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
                 <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                  Total Tagihan
+                  Total Semua Faktur
                 </span>
-                <span className="text-sm sm:text-base font-extrabold text-slate-900 font-mono block mt-0.5">
+                <span className="text-sm sm:text-base font-black text-slate-900 font-mono block mt-1">
                   {formatRupiah(stats?.totalAmount || 0)}
                 </span>
               </div>
 
-              <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-100">
-                <span className="text-[10px] font-bold uppercase text-emerald-600 block">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-100">
+                <span className="text-[10px] font-bold uppercase text-emerald-700 block">
                   Sudah Dibayar (Lunas)
                 </span>
-                <span className="text-sm sm:text-base font-extrabold text-emerald-700 font-mono block mt-0.5">
+                <span className="text-sm sm:text-base font-black text-emerald-700 font-mono block mt-1">
                   {formatRupiah(stats?.totalPaid || 0)}
                 </span>
               </div>
 
-              <div className="col-span-2 sm:col-span-1 p-3 rounded-2xl bg-amber-50/80 border border-amber-200">
-                <span className="text-[10px] font-bold uppercase text-amber-700 block">
-                  Sisa Tertunggak
+              <div className="col-span-2 sm:col-span-1 p-3.5 rounded-2xl bg-rose-50/80 border border-rose-200">
+                <span className="text-[10px] font-bold uppercase text-rose-700 block">
+                  Sisa Menunggu Pembayaran
                 </span>
-                <span className="text-sm sm:text-base font-extrabold text-amber-800 font-mono block mt-0.5">
+                <span className="text-sm sm:text-base font-black text-rose-800 font-mono block mt-1">
                   {formatRupiah(stats?.totalUnpaid || 0)}
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-500">Filter status:</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-2 border-t border-slate-100">
+              <span className="text-slate-500 font-medium">Filter status:</span>
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
                 <button
                   onClick={() => setActiveTabFilter('all')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
                     activeTabFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
                   }`}
                 >
@@ -407,15 +466,15 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 </button>
                 <button
                   onClick={() => setActiveTabFilter('unpaid')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                    activeTabFilter === 'unpaid' ? 'bg-white text-amber-800 shadow-xs' : 'text-slate-600'
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                    activeTabFilter === 'unpaid' ? 'bg-white text-rose-700 shadow-xs' : 'text-slate-600'
                   }`}
                 >
                   Belum Lunas ({stats?.pendingInvoices || 0})
                 </button>
                 <button
                   onClick={() => setActiveTabFilter('paid')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
                     activeTabFilter === 'paid' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600'
                   }`}
                 >
@@ -451,53 +510,117 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   <div
                     key={inv.id}
                     onClick={() => setActiveInvoice(inv)}
-                    className={`p-4 rounded-3xl border transition cursor-pointer flex flex-col justify-between gap-3 ${
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer ${
                       isSelected
-                        ? 'border-blue-500 bg-blue-50/50 shadow-md ring-2 ring-blue-500/20'
+                        ? 'border-blue-600 bg-blue-50/40 shadow-sm ring-1 ring-blue-600/30'
                         : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-extrabold text-slate-900 font-mono">
+                          <span className="font-mono font-bold text-slate-900 text-xs sm:text-sm">
                             {inv.invoiceNumber}
                           </span>
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusInfo.badgeClass}`}>
                             {statusInfo.label}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-500 block mt-0.5">
-                          Jatuh Tempo: <strong>{formatDateIndo(inv.dueDate)}</strong>
-                        </span>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Terbit: {formatDateIndo(inv.date)} • Tempo: {formatDateIndo(inv.dueDate)}
+                        </p>
                       </div>
 
                       <div className="text-right">
-                        <span className="text-xs font-extrabold text-slate-900 font-mono block">
+                        <span className="font-black text-slate-900 text-xs sm:text-sm font-mono block">
                           {formatRupiah(inv.totalAmount)}
                         </span>
-                        {inv.paidAmount > 0 && inv.paidAmount < inv.totalAmount && (
-                          <span className="text-[10px] text-emerald-600 block">
-                            Dibayar: {formatRupiah(inv.paidAmount)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px]">
-                      <span className="text-slate-400">
-                        {inv.items?.length || 0} Layanan / Item
-                      </span>
-
-                      <div className="flex items-center gap-1.5 font-bold text-blue-600">
-                        <span>{isPaid ? 'Lihat Bukti Bayar' : 'Bayar Sekarang'}</span>
-                        <QrCode className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold text-blue-600 flex items-center gap-0.5 justify-end mt-0.5">
+                          {isPaid ? 'Lihat Bukti' : 'Bayar Sekarang →'}
+                        </span>
                       </div>
                     </div>
                   </div>
                 );
               })
             )}
+
+            {/* Multi-Payment Methods Information Box (BCA, BRI, DANA, Gojek) */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-blue-600" />
+                  <span>Pilihan Transfer Bank & E-Wallet</span>
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400">Verifikasi Resmi</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* BCA */}
+                <div className="p-2.5 rounded-xl bg-blue-50/50 border border-blue-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-blue-900 block">Bank BCA</span>
+                    <p className="font-mono font-bold text-slate-900 text-xs">{settings?.bcaAccountNumber || '8730918231'}</p>
+                    <p className="text-[10px] text-slate-500">A/N {settings?.bcaAccountHolder || companyName}</p>
+                  </div>
+                  <button
+                    onClick={() => handleCopyBankAcc(settings?.bcaAccountNumber || '8730918231')}
+                    className="p-1.5 rounded-lg bg-white border border-blue-200 hover:bg-blue-50 text-slate-700 transition"
+                    title="Salin No. BCA"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* BRI */}
+                <div className="p-2.5 rounded-xl bg-sky-50/50 border border-sky-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-sky-900 block">Bank BRI</span>
+                    <p className="font-mono font-bold text-slate-900 text-xs">{settings?.briAccountNumber || '012301098765501'}</p>
+                    <p className="text-[10px] text-slate-500">A/N {settings?.briAccountHolder || companyName}</p>
+                  </div>
+                  <button
+                    onClick={() => handleCopyBankAcc(settings?.briAccountNumber || '012301098765501')}
+                    className="p-1.5 rounded-lg bg-white border border-sky-200 hover:bg-sky-50 text-slate-700 transition"
+                    title="Salin No. BRI"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* DANA */}
+                <div className="p-2.5 rounded-xl bg-cyan-50/50 border border-cyan-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-cyan-900 block">DANA</span>
+                    <p className="font-mono font-bold text-slate-900 text-xs">{settings?.danaNumber || '08977345640'}</p>
+                    <p className="text-[10px] text-slate-500">A/N {settings?.danaAccountHolder || 'Heruhendri'}</p>
+                  </div>
+                  <button
+                    onClick={() => handleCopyBankAcc(settings?.danaNumber || '08977345640')}
+                    className="p-1.5 rounded-lg bg-white border border-cyan-200 hover:bg-cyan-50 text-slate-700 transition"
+                    title="Salin No. DANA"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Gojek */}
+                <div className="p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-900 block">Gojek / GoPay</span>
+                    <p className="font-mono font-bold text-slate-900 text-xs">{settings?.gojekNumber || '08977345640'}</p>
+                    <p className="text-[10px] text-slate-500">A/N {settings?.gojekAccountHolder || 'Heruhendri'}</p>
+                  </div>
+                  <button
+                    onClick={() => handleCopyBankAcc(settings?.gojekNumber || '08977345640')}
+                    className="p-1.5 rounded-lg bg-white border border-emerald-200 hover:bg-emerald-50 text-slate-700 transition"
+                    title="Salin No. Gojek"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Right Column: QRIS Dinamis & Invoice Breakdown (7 cols on lg) */}
@@ -505,7 +628,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             {activeInvoice ? (
               <div className="rounded-3xl border border-slate-200 bg-white shadow-xl overflow-hidden animate-in fade-in zoom-in-95">
                 {/* Header of Active Invoice */}
-                <div className="p-6 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                <div className="p-6 border-b border-slate-100 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
                       <h4 className="text-base font-extrabold text-slate-900 font-mono">
@@ -516,18 +639,19 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Diterbitkan pada {formatDateIndo(activeInvoice.date)} • Jatuh tempo: {formatDateIndo(activeInvoice.dueDate)}
+                      Diterbitkan {formatDateIndo(activeInvoice.date)} • Jatuh tempo: {formatDateIndo(activeInvoice.dueDate)}
                     </p>
                   </div>
 
+                  {/* Print / PDF Button */}
                   {onSelectInvoiceForPrint && (
                     <button
                       onClick={() => onSelectInvoiceForPrint(activeInvoice)}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-2xs"
-                      title="Cetak Faktur Resmi"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-2xs"
+                      title="Cetak Faktur Resmi / Simpan PDF"
                     >
                       <Printer className="w-3.5 h-3.5 text-blue-600" />
-                      <span className="hidden sm:inline">Cetak PDF</span>
+                      <span>Cetak / PDF</span>
                     </button>
                   )}
                 </div>
@@ -535,17 +659,17 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 <div className="p-6 space-y-6">
                   {/* QRIS Dinamis Showcase Box (If not paid) */}
                   {activeInvoice.status !== 'paid' ? (
-                    <div className="p-6 rounded-3xl bg-gradient-to-b from-blue-50/60 to-indigo-50/40 border border-blue-200 text-center flex flex-col items-center">
-                      <span className="px-3 py-1 rounded-full bg-blue-600 text-white text-[11px] font-extrabold uppercase tracking-wider mb-2 flex items-center gap-1.5 shadow-sm">
+                    <div className="p-6 rounded-3xl bg-gradient-to-b from-blue-50/70 via-indigo-50/40 to-slate-50 border border-blue-200/80 text-center flex flex-col items-center">
+                      <span className="px-3.5 py-1 rounded-full bg-blue-600 text-white text-[11px] font-extrabold uppercase tracking-wider mb-2 flex items-center gap-1.5 shadow-sm">
                         <QrCode className="w-3.5 h-3.5" />
-                        Pindai QRIS Dinamis (Auto-Nominal)
+                        Pindai QRIS Dinamis (Nominal Terkunci)
                       </span>
 
-                      <h5 className="text-lg font-black text-slate-900">
-                        Total Tagihan: {formatRupiah(activeInvoice.totalAmount)}
+                      <h5 className="text-xl sm:text-2xl font-black text-slate-900 font-mono mt-1">
+                        {formatRupiah(activeInvoice.totalAmount)}
                       </h5>
-                      <p className="text-xs text-slate-600 max-w-sm mt-1">
-                        Buka aplikasi perbankan (BCA, Mandiri, BRI, BNI) atau e-wallet (DANA, GoPay, OVO, ShopeePay). Pindai QR di bawah, nominal otomatis terisi presisi.
+                      <p className="text-xs text-slate-600 max-w-md mt-1.5 leading-relaxed">
+                        Buka aplikasi mobile banking (BCA, Mandiri, BRI, BNI) atau e-wallet (DANA, GoPay, OVO, ShopeePay). Pindai QR di bawah, nominal otomatis terisi presisi tanpa perlu ketik manual.
                       </p>
 
                       {/* QR Image */}
@@ -562,7 +686,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           </div>
                         )}
                         <span className="block mt-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                          STANDAR QRIS BANK INDONESIA (CRC16 VALID)
+                          STANDAR QRIS BANK INDONESIA (ASPI & EMVCO COMPLIANT)
                         </span>
                       </div>
 
@@ -570,15 +694,15 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                         <button
                           onClick={() => handleDownloadQr(activeInvoice)}
-                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition active:scale-95"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition active:scale-95"
                         >
                           <Download className="w-3.5 h-3.5" />
-                          <span>Unduh Gambar QRIS</span>
+                          <span>Simpan Gambar QRIS</span>
                         </button>
 
                         <button
                           onClick={() => handleCopyQris(activeInvoice.dynamicQris)}
-                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition active:scale-95"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition active:scale-95"
                         >
                           {copiedQris ? (
                             <>
@@ -592,6 +716,18 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                             </>
                           )}
                         </button>
+
+                        <a
+                          href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                            `Halo ${companyName}, saya ingin konfirmasi pembayaran invoice *${activeInvoice.invoiceNumber}* sebesar *${formatRupiah(activeInvoice.totalAmount)}* a.n *${activeInvoice.customer.name}*.`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition active:scale-95"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                          <span>Konfirmasi via WA</span>
+                        </a>
                       </div>
                     </div>
                   ) : (
@@ -611,7 +747,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       </p>
 
                       {activeInvoice.transactions && activeInvoice.transactions.length > 0 && (
-                        <div className="mt-4 p-3 rounded-2xl bg-white border border-emerald-200 w-full max-w-md text-xs text-left">
+                        <div className="mt-4 p-3.5 rounded-2xl bg-white border border-emerald-200 w-full max-w-md text-xs text-left">
                           <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
                             Rincian Transaksi
                           </span>
@@ -639,7 +775,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     </h5>
                     <div className="rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-100 text-xs">
                       {activeInvoice.items?.map((item, idx) => (
-                        <div key={idx} className="p-3 bg-white flex items-center justify-between">
+                        <div key={idx} className="p-3.5 bg-white flex items-center justify-between">
                           <div>
                             <p className="font-bold text-slate-900">{item.description}</p>
                             <span className="text-[11px] text-slate-500">
@@ -675,8 +811,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       )}
 
                       <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-extrabold text-slate-900">
-                        <span>Total Akhir:</span>
-                        <span className="font-mono text-blue-700">{formatRupiah(activeInvoice.totalAmount)}</span>
+                        <span>Total Tagihan:</span>
+                        <span className="font-mono text-blue-700 text-base">{formatRupiah(activeInvoice.totalAmount)}</span>
                       </div>
                     </div>
                   </div>
@@ -706,37 +842,43 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
       {/* Initial Landing State before searching */}
       {!hasSearched && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-          <div className="p-5 rounded-3xl border border-slate-200 bg-white shadow-xs">
-            <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold mb-3">
+          <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs">
+            <div className="w-11 h-11 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold mb-3">
               <Search className="w-5 h-5" />
             </div>
             <h4 className="text-sm font-bold text-slate-900">1. Cari Tagihan</h4>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
               Cukup masukkan nomor WhatsApp yang Anda gunakan saat pemesanan atau nomor faktur.
             </p>
           </div>
 
-          <div className="p-5 rounded-3xl border border-slate-200 bg-white shadow-xs">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold mb-3">
+          <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold mb-3">
               <QrCode className="w-5 h-5" />
             </div>
-            <h4 className="text-sm font-bold text-slate-900">2. Pindai QRIS</h4>
-            <p className="text-xs text-slate-500 mt-1">
-              Pindai QRIS Dinamis dengan BCA, Mandiri, BRI, DANA, GoPay, atau OVO. Nominal otomatis terisi.
+            <h4 className="text-sm font-bold text-slate-900">2. Pindai QRIS Dinamis</h4>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Pindai QRIS dengan BCA, Mandiri, BRI, DANA, GoPay, atau OVO. Nominal otomatis terkunci presisi.
             </p>
           </div>
 
-          <div className="p-5 rounded-3xl border border-slate-200 bg-white shadow-xs">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold mb-3">
+          <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold mb-3">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <h4 className="text-sm font-bold text-slate-900">3. Unduh Bukti Lunas</h4>
-            <p className="text-xs text-slate-500 mt-1">
-              Faktur terverifikasi langsung dapat dicetak atau disimpan dalam bentuk PDF resmi.
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              Faktur terverifikasi langsung dapat dicetak atau disimpan dalam bentuk PDF resmi dengan 5 template pilihan.
             </p>
           </div>
         </div>
       )}
+
+      {/* Portal Watermark Footer */}
+      <footer className="mt-12 py-6 border-t border-slate-200/80 text-center text-xs text-slate-500 font-medium">
+        <p>{settings?.watermarkText || 'Aplikasi ini dibuat oleh Heru Hendri • Contact Person: 08977345640'}</p>
+        <p className="text-[11px] text-slate-400 mt-1">Portal Pembayaran Tagihan Resmi & Terverifikasi Otomatis</p>
+      </footer>
     </div>
   );
 };

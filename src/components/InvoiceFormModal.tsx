@@ -12,7 +12,15 @@ import {
   Package,
   Users,
   Check,
-  ChevronDown
+  ChevronDown,
+  Activity,
+  Cpu,
+  Network,
+  ShieldCheck,
+  Sparkles,
+  Clock,
+  Sliders,
+  Radio
 } from 'lucide-react';
 import { Invoice, InvoiceItem, CustomerRecord, ServiceItem } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -43,11 +51,14 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [selectedCustomerRecord, setSelectedCustomerRecord] = useState<CustomerRecord | null>(preselectedCustomer || null);
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(
     new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
+  const [dateMode, setDateMode] = useState<'system' | 'custom'>('system');
+  const [activeDatePreset, setActiveDatePreset] = useState<string>('standard');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [staticQris, setStaticQris] = useState('');
   const [notes, setNotes] = useState('Terima kasih atas kerja samanya. Pembayaran dapat dilakukan dengan scan QRIS Dinamis terlampir.');
@@ -84,6 +95,9 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       setStaticQris(editInvoice.staticQris || defaultStaticQris || '');
       setNotes(editInvoice.notes || '');
       setPaymentTerms(editInvoice.paymentTerms || '');
+      
+      const foundCust = customers.find(c => c.id === editInvoice.customer.id || c.name.toLowerCase() === editInvoice.customer.name.toLowerCase());
+      setSelectedCustomerRecord(foundCust || null);
     } else {
       // Reset for new invoice
       const now = new Date();
@@ -92,38 +106,94 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       setInvoiceNumber(`INV-${now.getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
       
       if (preselectedCustomer) {
+        setSelectedCustomerRecord(preselectedCustomer);
         setCustomerName(preselectedCustomer.name);
         setCustomerCompany(preselectedCustomer.company || '');
         setCustomerEmail(preselectedCustomer.email || '');
         setCustomerPhone(preselectedCustomer.phone || '628');
         setCustomerAddress(preselectedCustomer.address || '');
+
+        if (preselectedCustomer.customerMode === 'noc' && preselectedCustomer.mikrotik) {
+          const mk = preselectedCustomer.mikrotik;
+          const nonIso = Number(mk.nonIsolirCount) >= 0 ? Number(mk.nonIsolirCount) : (mk.activePppoeCount ? Math.round(mk.activePppoeCount * 0.88) : 84);
+          const rate = Number(mk.ratePerUser) >= 500 ? Number(mk.ratePerUser) : 5000;
+          const total = nonIso * rate;
+          setItems([
+            {
+              id: `mk-${Date.now()}`,
+              description: `Layanan Monitoring & NOC Mikrotik [${mk.routerName || 'Mikrotik'}] (${nonIso} User PPPoE Aktif Non-Isolir @ ${formatRupiah(rate)})`,
+              quantity: nonIso,
+              price: rate,
+              total,
+            },
+          ]);
+          setNotes(`Biaya monitoring jaringan & pemeliharaan NOC dihitung otomatis berdasarkan ${nonIso} user PPPoE aktif non-isolir pada router ${mk.routerName || 'Mikrotik'} (Host: ${mk.host || '-'}).`);
+        } else {
+          setItems([
+            { id: '1', description: 'Layanan / Produk Utama', quantity: 1, price: 1500000, total: 1500000 },
+          ]);
+        }
       } else {
+        setSelectedCustomerRecord(null);
         setCustomerName('');
         setCustomerCompany('');
         setCustomerEmail('');
         setCustomerPhone('628');
         setCustomerAddress('');
+        setItems([
+          { id: '1', description: 'Layanan / Produk Utama', quantity: 1, price: 1500000, total: 1500000 },
+        ]);
       }
 
-      setItems([
-        { id: '1', description: 'Layanan / Produk Utama', quantity: 1, price: 1500000, total: 1500000 },
-      ]);
       setTaxPercent(11);
       setDiscountAmount(0);
       setStaticQris(defaultStaticQris || '');
     }
-  }, [editInvoice, defaultStaticQris, preselectedCustomer, isOpen]);
+  }, [editInvoice, defaultStaticQris, preselectedCustomer, isOpen, customers]);
 
   if (!isOpen) return null;
 
   // Auto-fill from customer selection
   const handleSelectCustomer = (c: CustomerRecord) => {
+    setSelectedCustomerRecord(c);
     setCustomerName(c.name);
     setCustomerCompany(c.company || '');
     setCustomerEmail(c.email || '');
     setCustomerPhone(c.phone || '628');
     setCustomerAddress(c.address || '');
     setShowCustomerDropdown(false);
+
+    if (c.customerMode === 'noc' && c.mikrotik) {
+      const mk = c.mikrotik;
+      const nonIso = Number(mk.nonIsolirCount) >= 0 ? Number(mk.nonIsolirCount) : (mk.activePppoeCount ? Math.round(mk.activePppoeCount * 0.88) : 84);
+      const rate = Number(mk.ratePerUser) >= 500 ? Number(mk.ratePerUser) : 5000;
+      const total = nonIso * rate;
+      setItems([
+        {
+          id: `mk-${Date.now()}`,
+          description: `Layanan Monitoring & NOC Mikrotik [${mk.routerName || 'Mikrotik'}] (${nonIso} User PPPoE Aktif Non-Isolir @ ${formatRupiah(rate)})`,
+          quantity: nonIso,
+          price: rate,
+          total,
+        },
+      ]);
+      setNotes(`Biaya monitoring jaringan & pemeliharaan NOC dihitung otomatis berdasarkan ${nonIso} user PPPoE aktif non-isolir pada router ${mk.routerName || 'Mikrotik'} (Host: ${mk.host || '-'}).`);
+    }
+  };
+
+  const handleApplyMikrotikBilling = (mk: NonNullable<CustomerRecord['mikrotik']>) => {
+    const nonIso = Number(mk.nonIsolirCount) >= 0 ? Number(mk.nonIsolirCount) : (mk.activePppoeCount ? Math.round(mk.activePppoeCount * 0.88) : 84);
+    const rate = Number(mk.ratePerUser) >= 500 ? Number(mk.ratePerUser) : 5000;
+    const total = nonIso * rate;
+    setItems([
+      {
+        id: `mk-${Date.now()}`,
+        description: `Layanan Monitoring & NOC Mikrotik [${mk.routerName || 'Mikrotik'}] (${nonIso} User PPPoE Aktif Non-Isolir @ ${formatRupiah(rate)})`,
+        quantity: nonIso,
+        price: rate,
+        total,
+      },
+    ]);
   };
 
   // Add from service catalog
@@ -139,6 +209,62 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
       },
     ]);
     setShowServicePicker(false);
+  };
+
+  // Date Preset Helpers (Rekomendasi Sistem vs Custom)
+  const applyDatePreset = (preset: 'standard' | 'beginning_month' | 'isp_billing' | 'end_month' | 'two_weeks') => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    
+    if (preset === 'standard') {
+      const today = now.toISOString().split('T')[0];
+      const due = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      setDate(today);
+      setDueDate(due);
+      setActiveDatePreset('standard');
+      setDateMode('system');
+    } else if (preset === 'beginning_month') {
+      const mStr = String(month + 1).padStart(2, '0');
+      setDate(`${year}-${mStr}-01`);
+      setDueDate(`${year}-${mStr}-10`);
+      setActiveDatePreset('beginning_month');
+      setDateMode('system');
+    } else if (preset === 'isp_billing') {
+      const mStr = String(month + 1).padStart(2, '0');
+      setDate(`${year}-${mStr}-05`);
+      setDueDate(`${year}-${mStr}-20`);
+      setActiveDatePreset('isp_billing');
+      setDateMode('system');
+    } else if (preset === 'end_month') {
+      const today = now.toISOString().split('T')[0];
+      const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+      setDate(today);
+      setDueDate(lastDay);
+      setActiveDatePreset('end_month');
+      setDateMode('system');
+    } else if (preset === 'two_weeks') {
+      const today = now.toISOString().split('T')[0];
+      const due = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      setDate(today);
+      setDueDate(due);
+      setActiveDatePreset('two_weeks');
+      setDateMode('system');
+    }
+  };
+
+  // Quick Add-on helper (VPN & Monitoring)
+  const handleQuickAddAddon = (description: string, price: number) => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id: `addon-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        description,
+        quantity: 1,
+        price,
+        total: price,
+      },
+    ]);
   };
 
   // Item helpers
@@ -255,45 +381,174 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             </div>
           )}
 
-          {/* Top Section: Invoice Number, Date, Due Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                Nomor Invoice
-              </label>
-              <input
-                type="text"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 bg-white"
-                required
-              />
+          {/* Top Section: Invoice Number, Date, Due Date with System Recommendation vs Custom Mode */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+            {/* Header with Mode indicator */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200/60">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-bold text-slate-800">
+                  Pengaturan Tanggal & Periode Tagihan
+                </span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                  dateMode === 'system'
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                    : 'bg-amber-100 text-amber-800 border border-amber-200'
+                }`}>
+                  {dateMode === 'system' ? '⚡ Rekomendasi Sistem' : '✏️ Custom Tanggal'}
+                </span>
+              </div>
+
+              {/* Mode Switcher */}
+              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs">
+                <button
+                  type="button"
+                  onClick={() => applyDatePreset('standard')}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
+                    dateMode === 'system'
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Rekomendasi Sistem
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateMode('custom');
+                    setActiveDatePreset('custom');
+                  }}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
+                    dateMode === 'custom'
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Custom Bebas
+                </button>
+              </div>
             </div>
 
-            <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                Tanggal Terbit
-              </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 bg-white"
-                required
-              />
+            {/* Quick System Recommendation Presets */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+                Pilihan Rekomendasi:
+              </span>
+              <button
+                type="button"
+                onClick={() => applyDatePreset('standard')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                  activeDatePreset === 'standard'
+                    ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-2xs font-bold'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Standar (+7 Hari)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDatePreset('beginning_month')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                  activeDatePreset === 'beginning_month'
+                    ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-2xs font-bold'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Awal Bulan (Tgl 1 - Tgl 10)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDatePreset('isp_billing')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                  activeDatePreset === 'isp_billing'
+                    ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-2xs font-bold'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Billing ISP / PPPoE (Tgl 5 - Tgl 20)
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDatePreset('end_month')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                  activeDatePreset === 'end_month'
+                    ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-2xs font-bold'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Akhir Bulan
+              </button>
+              <button
+                type="button"
+                onClick={() => applyDatePreset('two_weeks')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                  activeDatePreset === 'two_weeks'
+                    ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-2xs font-bold'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                Tempo 14 Hari
+              </button>
             </div>
 
-            <div>
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                Jatuh Tempo (Due Date)
-              </label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 bg-white"
-                required
-              />
+            {/* Inputs Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Nomor Invoice
+                </label>
+                <input
+                  type="text"
+                  value={invoiceNumber}
+                  onChange={(e) => setInvoiceNumber(e.target.value)}
+                  className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 bg-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Tanggal Terbit
+                  </label>
+                  {dateMode === 'custom' && (
+                    <span className="text-[10px] text-amber-600 font-bold">Custom</span>
+                  )}
+                </div>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => {
+                    setDate(e.target.value);
+                    setDateMode('custom');
+                    setActiveDatePreset('custom');
+                  }}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 bg-white"
+                  required
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Jatuh Tempo (Due Date)
+                  </label>
+                  {dateMode === 'custom' && (
+                    <span className="text-[10px] text-amber-600 font-bold">Custom</span>
+                  )}
+                </div>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => {
+                    setDueDate(e.target.value);
+                    setDateMode('custom');
+                    setActiveDatePreset('custom');
+                  }}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 bg-white"
+                  required
+                />
+              </div>
             </div>
           </div>
 
@@ -319,16 +574,28 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                   </button>
 
                   {showCustomerDropdown && (
-                    <div className="absolute right-0 mt-1 w-64 rounded-2xl bg-white border border-slate-200 shadow-xl z-20 py-1 divide-y divide-slate-100 max-h-56 overflow-y-auto">
+                    <div className="absolute right-0 mt-1 w-72 rounded-2xl bg-white border border-slate-200 shadow-xl z-20 py-1 divide-y divide-slate-100 max-h-64 overflow-y-auto">
                       {customers.map((c) => (
                         <button
                           key={c.id}
                           type="button"
                           onClick={() => handleSelectCustomer(c)}
-                          className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 transition flex flex-col"
+                          className="w-full text-left px-3 py-2.5 text-xs hover:bg-blue-50 transition flex flex-col gap-0.5"
                         >
-                          <span className="font-bold text-slate-900">{c.name}</span>
-                          {c.company && <span className="text-[10px] text-slate-500">{c.company}</span>}
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-slate-900 truncate">{c.name}</span>
+                            {c.customerMode === 'noc' && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-indigo-100 text-indigo-800 shrink-0">
+                                Mode NOC
+                              </span>
+                            )}
+                          </div>
+                          {c.company && <span className="text-[10px] text-slate-500 truncate">{c.company}</span>}
+                          {c.customerMode === 'noc' && c.mikrotik && (
+                            <span className="text-[10px] text-indigo-600 font-medium">
+                              Router: {c.mikrotik.routerName} • {c.mikrotik.nonIsolirCount || 0} user PPPoE
+                            </span>
+                          )}
                           {c.phone && <span className="text-[10px] text-slate-400 font-mono">{c.phone}</span>}
                         </button>
                       ))}
@@ -337,6 +604,42 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 </div>
               )}
             </div>
+
+            {/* If selected customer is Mode NOC, display active Mikrotik telemetry and recalculation bar */}
+            {selectedCustomerRecord?.customerMode === 'noc' && selectedCustomerRecord.mikrotik && (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-cyan-50 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs shrink-0">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-black text-slate-900">
+                        {selectedCustomerRecord.mikrotik.routerName || 'Mikrotik Core Router'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase">
+                        {selectedCustomerRecord.mikrotik.nonIsolirCount ?? 84} PPPoE Non-Isolir (Aktif)
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-medium">
+                        {selectedCustomerRecord.mikrotik.isolirCount ?? 0} Isolir
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1">
+                      Host: <span className="font-mono font-bold text-blue-700">{selectedCustomerRecord.mikrotik.host}</span> • Tarif: <span className="font-bold text-slate-900">{formatRupiah(selectedCustomerRecord.mikrotik.ratePerUser || 5000)}</span>/user • Estimasi: <span className="font-extrabold text-emerald-700">{formatRupiah((selectedCustomerRecord.mikrotik.nonIsolirCount ?? 84) * (selectedCustomerRecord.mikrotik.ratePerUser || 5000))}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleApplyMikrotikBilling(selectedCustomerRecord.mikrotik!)}
+                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-500/20 transition active:scale-95 flex items-center justify-center gap-1.5 self-start sm:self-auto shrink-0"
+                  title="Klik untuk mengisi item invoice dengan data deteksi PPPoE Mikrotik"
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>Isi Tagihan PPPoE</span>
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -462,6 +765,64 @@ export const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Tambah Baris</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Include Layanan Tambahan (VPN & Biaya Monitoring) */}
+            <div className="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-100/90 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-indigo-950 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Tambahkan Layanan Tambahan (VPN & Monitoring) Sekali Klik:</span>
+                </span>
+                <span className="text-[10px] text-indigo-600 font-semibold hidden sm:inline">
+                  Langsung dihitung ke total tagihan
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleQuickAddAddon('Layanan VPN Remote Mikrotik Dedicated (WireGuard/L2TP)', 50000)}
+                  className="px-2.5 py-1 rounded-xl bg-white border border-indigo-200 hover:border-indigo-400 text-indigo-900 text-[11px] font-bold shadow-2xs hover:bg-indigo-50/50 transition flex items-center gap-1 active:scale-95"
+                >
+                  <Plus className="w-3 h-3 text-indigo-600" />
+                  <span>VPN Remote Mikrotik (Rp 50.000)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickAddAddon('Biaya Monitoring Jaringan NOC & Router 24/7 (Realtime Alert)', 250000)}
+                  className="px-2.5 py-1 rounded-xl bg-white border border-indigo-200 hover:border-indigo-400 text-indigo-900 text-[11px] font-bold shadow-2xs hover:bg-indigo-50/50 transition flex items-center gap-1 active:scale-95"
+                >
+                  <Plus className="w-3 h-3 text-indigo-600" />
+                  <span>Biaya Monitoring NOC (Rp 250.000)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickAddAddon('Sewa Port VPN IP Publik Dinamis Dedicated', 75000)}
+                  className="px-2.5 py-1 rounded-xl bg-white border border-indigo-200 hover:border-indigo-400 text-indigo-900 text-[11px] font-bold shadow-2xs hover:bg-indigo-50/50 transition flex items-center gap-1 active:scale-95"
+                >
+                  <Plus className="w-3 h-3 text-indigo-600" />
+                  <span>Port VPN Publik (Rp 75.000)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickAddAddon('Biaya Monitoring Server & Database Realtime 24/7', 350000)}
+                  className="px-2.5 py-1 rounded-xl bg-white border border-indigo-200 hover:border-indigo-400 text-indigo-900 text-[11px] font-bold shadow-2xs hover:bg-indigo-50/50 transition flex items-center gap-1 active:scale-95"
+                >
+                  <Plus className="w-3 h-3 text-indigo-600" />
+                  <span>Monitoring Server (Rp 350.000)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleQuickAddAddon('Layanan VPN Remote Mikrotik Dedicated (WireGuard/L2TP)', 50000);
+                    handleQuickAddAddon('Biaya Monitoring Jaringan NOC & Router 24/7 (Realtime Alert)', 250000);
+                  }}
+                  className="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-2xs transition flex items-center gap-1 active:scale-95"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-300" />
+                  <span>+ Paket Lengkap (VPN + NOC)</span>
                 </button>
               </div>
             </div>

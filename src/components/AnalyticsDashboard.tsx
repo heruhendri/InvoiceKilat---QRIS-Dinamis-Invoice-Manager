@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -24,7 +24,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { AnalyticsSummary, Invoice } from '../types';
-import { formatRupiah, formatDateTimeIndo } from '../utils/formatters';
+import { formatRupiah, formatDateTimeIndo, formatDateIndo } from '../utils/formatters';
 
 interface AnalyticsDashboardProps {
   analytics: AnalyticsSummary | null;
@@ -53,6 +53,98 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   }
 
   const { summary, dailyChartData, monthlyChartData, recentTransactions } = analytics;
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  // Compute live indicators dynamically from the current active invoices array
+  const {
+    liveOverdueInvoices,
+    liveTotalOverdueAmount,
+    liveOverdueCount,
+    liveTotalOutstanding,
+    livePendingCount,
+    livePaidCount,
+    liveTotalRevenueThisMonth,
+    liveTotalRevenueToday,
+    liveCollectionRate,
+  } = useMemo(() => {
+    if (!invoices || invoices.length === 0) {
+      return {
+        liveOverdueInvoices: [],
+        liveTotalOverdueAmount: summary?.totalOverdueAmount ?? 0,
+        liveOverdueCount: summary?.invoiceCounts?.overdue ?? 0,
+        liveTotalOutstanding: summary?.totalOutstanding ?? 0,
+        livePendingCount: summary?.invoiceCounts?.pending ?? 0,
+        livePaidCount: summary?.invoiceCounts?.paid ?? 0,
+        liveTotalRevenueThisMonth: summary?.totalRevenueThisMonth ?? 0,
+        liveTotalRevenueToday: summary?.totalRevenueToday ?? 0,
+        liveCollectionRate: summary?.collectionRate ?? 0,
+      };
+    }
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    const overdueList: Invoice[] = [];
+    let overdueAmt = 0;
+    let outstandingAmt = 0;
+    let pendingCnt = 0;
+    let paidCnt = 0;
+    let revMonth = 0;
+    let revToday = 0;
+
+    for (const inv of invoices) {
+      const unpaid = Math.max(0, inv.totalAmount - (inv.paidAmount || 0));
+      const isOverdue = inv.status === 'overdue' || (unpaid > 0 && inv.dueDate < todayStr);
+
+      if (isOverdue) {
+        overdueList.push(inv);
+        overdueAmt += unpaid;
+      }
+
+      if (inv.status === 'paid') {
+        paidCnt++;
+      } else {
+        outstandingAmt += unpaid;
+        if (!isOverdue) {
+          pendingCnt++;
+        }
+      }
+
+      // Track revenue from verified transactions or payments
+      if (inv.transactions && inv.transactions.length > 0) {
+        for (const trx of inv.transactions) {
+          const trxDate = new Date(trx.verifiedAt);
+          if (trx.verifiedAt?.startsWith(todayStr)) {
+            revToday += trx.amount;
+          }
+          if (trxDate.getFullYear() === currentYear && trxDate.getMonth() === currentMonth) {
+            revMonth += trx.amount;
+          }
+        }
+      } else if (inv.status === 'paid' && inv.paidAmount > 0) {
+        const invDate = new Date(inv.date);
+        if (invDate.getFullYear() === currentYear && invDate.getMonth() === currentMonth) {
+          revMonth += inv.paidAmount;
+        }
+      }
+    }
+
+    const rate = invoices.length > 0 ? Math.round((paidCnt / invoices.length) * 100) : 0;
+
+    return {
+      liveOverdueInvoices: overdueList,
+      liveTotalOverdueAmount: overdueAmt,
+      liveOverdueCount: overdueList.length,
+      liveTotalOutstanding: outstandingAmt,
+      livePendingCount: pendingCnt,
+      livePaidCount: paidCnt,
+      liveTotalRevenueThisMonth: revMonth > 0 ? revMonth : (summary?.totalRevenueThisMonth ?? 0),
+      liveTotalRevenueToday: revToday,
+      liveCollectionRate: rate,
+    };
+  }, [invoices, summary, todayStr]);
 
   // Custom Tooltip for charts
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -125,11 +217,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </div>
           <div className="mt-3">
             <span className="text-2xl font-extrabold tracking-tight text-slate-900">
-              {formatRupiah(summary.totalRevenueThisMonth)}
+              {formatRupiah(liveTotalRevenueThisMonth)}
             </span>
             <div className="mt-1 flex items-center gap-1 text-xs text-emerald-600 font-medium">
               <span>Hari ini:</span>
-              <span className="font-bold">{formatRupiah(summary.totalRevenueToday)}</span>
+              <span className="font-bold">{formatRupiah(liveTotalRevenueToday)}</span>
             </div>
           </div>
         </div>
@@ -146,32 +238,76 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </div>
           <div className="mt-3">
             <span className="text-2xl font-extrabold tracking-tight text-slate-900">
-              {formatRupiah(summary.totalOutstanding)}
+              {formatRupiah(liveTotalOutstanding)}
             </span>
             <div className="mt-1 text-xs text-slate-500">
-              Menunggu pembayaran ({summary.invoiceCounts.pending} invoice)
+              Menunggu pembayaran ({livePendingCount} invoice)
             </div>
           </div>
         </div>
 
-        {/* Card 3: Tagihan Jatuh Tempo (Overdue) */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Tagihan Overdue / Lewat Tempo
-            </span>
-            <div className="rounded-xl bg-rose-50 p-2.5 text-rose-600">
-              <AlertCircle className="h-5 w-5" />
+        {/* Card 3: Tagihan Jatuh Tempo (Overdue) - Sesuai dengan invoice saat ini */}
+        <div 
+          id="kpi-card-overdue"
+          className={`rounded-2xl border p-5 shadow-xs transition flex flex-col justify-between ${
+            liveOverdueCount > 0 
+              ? 'border-rose-200 bg-rose-50/25 hover:border-rose-300 hover:shadow-md' 
+              : 'border-slate-200/80 bg-white hover:shadow-md'
+          }`}
+        >
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Tagihan Overdue / Lewat Tempo
+              </span>
+              <div className={`rounded-xl p-2.5 ${liveOverdueCount > 0 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400'}`}>
+                <AlertCircle className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <span className={`text-2xl font-extrabold tracking-tight ${liveOverdueCount > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                {formatRupiah(liveTotalOverdueAmount)}
+              </span>
+              <div className="mt-1 text-xs font-medium text-slate-600">
+                <span className={liveOverdueCount > 0 ? 'text-rose-600 font-semibold' : 'text-slate-500'}>
+                  {liveOverdueCount > 0 ? `${liveOverdueCount} invoice perlu penagihan segera` : 'Semua invoice tepat waktu (0 invoice)'}
+                </span>
+              </div>
             </div>
           </div>
-          <div className="mt-3">
-            <span className="text-2xl font-extrabold tracking-tight text-rose-600">
-              {formatRupiah(summary.totalOverdueAmount)}
-            </span>
-            <div className="mt-1 text-xs text-rose-600 font-medium">
-              {summary.invoiceCounts.overdue} invoice perlu penagihan segera
+
+          {/* Rincian invoice yang saat ini sedang overdue */}
+          {liveOverdueInvoices.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-rose-100/90 space-y-2">
+              <div className="bg-white/90 rounded-xl p-2.5 border border-rose-200/80 text-[11px] shadow-2xs">
+                <div className="flex items-center justify-between font-bold text-slate-900">
+                  <span className="text-rose-700 font-black">{liveOverdueInvoices[0].invoiceNumber}</span>
+                  <span className="text-rose-600 font-semibold text-[10px] bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200">
+                    Tempo: {formatDateIndo(liveOverdueInvoices[0].dueDate)}
+                  </span>
+                </div>
+                <p className="text-slate-600 truncate mt-1 font-medium">
+                  {liveOverdueInvoices[0].customer.name}
+                  {liveOverdueInvoices[0].customer.company ? ` • ${liveOverdueInvoices[0].customer.company}` : ''}
+                </p>
+                <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                  <span>Sisa tagihan:</span>
+                  <span className="font-extrabold text-rose-600">
+                    {formatRupiah(Math.max(0, liveOverdueInvoices[0].totalAmount - (liveOverdueInvoices[0].paidAmount || 0)))}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onSelectInvoice(liveOverdueInvoices[0].id)}
+                className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2 px-3 transition active:scale-95 shadow-xs"
+                title="Buka rincian invoice yang jatuh tempo"
+              >
+                <span>Buka Invoice Menunggak</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Card 4: Total Pemasukan Akumulatif */}
@@ -186,16 +322,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </div>
           <div className="mt-3 flex items-baseline justify-between">
             <span className="text-2xl font-extrabold tracking-tight text-slate-900">
-              {summary.collectionRate}%
+              {liveCollectionRate}%
             </span>
             <span className="text-xs font-medium text-slate-500">
-              {summary.invoiceCounts.paid} dari {summary.invoiceCounts.total} invoice
+              {livePaidCount} dari {invoices.length || summary.invoiceCounts.total} invoice
             </span>
           </div>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
             <div 
               className="h-full rounded-full bg-blue-600 transition-all duration-500"
-              style={{ width: `${summary.collectionRate}%` }}
+              style={{ width: `${liveCollectionRate}%` }}
             />
           </div>
         </div>

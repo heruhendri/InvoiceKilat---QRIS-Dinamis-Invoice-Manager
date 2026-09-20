@@ -14,7 +14,8 @@ import {
   Building, 
   Calendar,
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Sparkles
 } from 'lucide-react';
 import { Invoice } from '../types';
 import { formatRupiah, formatDateIndo, getStatusDetails } from '../utils/formatters';
@@ -23,6 +24,7 @@ interface InvoiceListProps {
   invoices: Invoice[];
   onSelectInvoice: (id: string) => void;
   onOpenCreateInvoice: () => void;
+  onOpenGenerateMonthly?: () => void;
   onOpenPaymentModal: (invoice: Invoice) => void;
   onOpenEditInvoice: (invoice: Invoice) => void;
   onDeleteInvoice: (id: string) => void;
@@ -36,6 +38,7 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
   invoices,
   onSelectInvoice,
   onOpenCreateInvoice,
+  onOpenGenerateMonthly,
   onOpenPaymentModal,
   onOpenEditInvoice,
   onDeleteInvoice,
@@ -80,14 +83,27 @@ export const InvoiceList: React.FC<InvoiceListProps> = ({
           </p>
         </div>
 
-        <button
-          id="btn-new-invoice"
-          onClick={onOpenCreateInvoice}
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Buat Invoice Baru</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenGenerateMonthly && (
+            <button
+              id="btn-generate-monthly-invoice"
+              onClick={onOpenGenerateMonthly}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-500/20 hover:from-indigo-700 hover:to-blue-700 active:scale-95 transition"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>⚡ Generate Tagihan Bulanan</span>
+            </button>
+          )}
+
+          <button
+            id="btn-new-invoice"
+            onClick={onOpenCreateInvoice}
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Buat Invoice Baru</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}

@@ -23,7 +23,8 @@ import { BillingAutomationCenter } from './components/BillingAutomationCenter';
 import { CustomerPortal } from './components/CustomerPortal';
 import { CustomerPortalNavbar } from './components/CustomerPortalNavbar';
 import { AdminLogin } from './components/AdminLogin';
-import { FileText, ShieldCheck, Globe } from 'lucide-react';
+import { AppWatermark } from './components/AppWatermark';
+import { FileText, ShieldCheck, Globe, AlertCircle, CheckCircle2, Trash2, X } from 'lucide-react';
 
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { 
@@ -33,6 +34,7 @@ import {
   RealtimeEvent, 
   CustomerRecord, 
   ServiceItem, 
+  RecurringAddonService,
   BillingAutomationRule, 
   AutomationDispatchLog,
   AdminUser
@@ -68,6 +70,7 @@ export default function App() {
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
   const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [services, setServices] = useState<ServiceItem[]>([]);
+  const [recurringAddons, setRecurringAddons] = useState<RecurringAddonService[]>([]);
   const [automationRules, setAutomationRules] = useState<BillingAutomationRule[]>([]);
   const [automationLogs, setAutomationLogs] = useState<AutomationDispatchLog[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -81,12 +84,48 @@ export default function App() {
   const [isQrisModalOpen, setIsQrisModalOpen] = useState<boolean>(false);
   const [printInvoice, setPrintInvoice] = useState<Invoice | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'app' | 'company' | 'template' | 'qris' | 'backup' | 'notification'>('app');
+
+  const handleOpenSettings = (tab?: any) => {
+    const validTabs = ['app', 'company', 'template', 'qris', 'backup', 'notification'];
+    const selectedTab = (typeof tab === 'string' && validTabs.includes(tab)) ? tab : 'app';
+    setSettingsInitialTab(selectedTab as any);
+    setIsSettingsModalOpen(true);
+  };
 
   // Interactive operations state
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isCheckingReminders, setIsCheckingReminders] = useState<boolean>(false);
   const [isRunningAutomation, setIsRunningAutomation] = useState<boolean>(false);
   const [activeToast, setActiveToast] = useState<RealtimeEvent | null>(null);
+
+  // In-app dialog & notification states (replaces window.confirm & window.alert for iframe compatibility)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const [appAlert, setAppAlert] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'success' | 'error' | 'info';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
 
   // Fetch initial application data
   const fetchData = useCallback(async () => {
@@ -97,6 +136,7 @@ export default function App() {
         setData,
         custData,
         srvData,
+        addonsData,
         rulesData,
         logsData
       ] = await Promise.all([
@@ -105,15 +145,21 @@ export default function App() {
         fetch('/api/settings').then((r) => r.json()).catch(() => null),
         fetch('/api/customers').then((r) => r.json()).catch(() => ({ customers: [] })),
         fetch('/api/services').then((r) => r.json()).catch(() => ({ services: [] })),
+        fetch('/api/recurring-addons').then((r) => r.json()).catch(() => ({ addons: [] })),
         fetch('/api/automation/rules').then((r) => r.json()).catch(() => ({ rules: [] })),
         fetch('/api/automation/logs').then((r) => r.json()).catch(() => ({ logs: [] })),
       ]);
 
       if (invData?.invoices) setInvoices(invData.invoices);
       if (anaData?.summary) setAnalytics(anaData);
-      if (setData?.settings) setSettings(setData.settings);
+      if (setData?.settings) {
+        setSettings(setData.settings);
+      } else if (setData && typeof setData === 'object' && (setData.businessName !== undefined || setData.appName !== undefined)) {
+        setSettings(setData);
+      }
       if (custData?.customers) setCustomers(custData.customers);
       if (srvData?.services) setServices(srvData.services);
+      if (addonsData?.addons) setRecurringAddons(addonsData.addons);
       if (rulesData?.rules) setAutomationRules(rulesData.rules);
       if (logsData?.logs) setAutomationLogs(logsData.logs);
     } catch (err) {
@@ -242,18 +288,29 @@ export default function App() {
     fetchData();
   };
 
-  const handleDeleteInvoice = async (id: string) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus invoice ini?')) return;
-    try {
-      const res = await fetch(`/api/invoices/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setInvoices((prev) => prev.filter((i) => i.id !== id));
-        if (selectedInvoiceId === id) setSelectedInvoiceId(null);
-        fetchData();
-      }
-    } catch (e) {
-      console.error(e);
-    }
+  const handleDeleteInvoice = (id: string) => {
+    const inv = invoices.find((i) => i.id === id);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Invoice',
+      message: `Apakah Anda yakin ingin menghapus invoice #${inv?.invoiceNumber || id}? Data transaksi terkait juga akan dihapus dan tindakan ini tidak dapat dibatalkan.`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/invoices/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            setInvoices((prev) => prev.filter((i) => i.id !== id));
+            if (selectedInvoiceId === id) setSelectedInvoiceId(null);
+            fetchData();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      },
+    });
   };
 
   // Payment Settlement Handler
@@ -280,7 +337,21 @@ export default function App() {
 
     const encoded = encodeURIComponent(text);
     const url = `https://wa.me/${cleanPhone}?text=${encoded}`;
-    window.open(url, '_blank');
+    
+    // Safely trigger external navigation in next event loop tick to prevent cross-origin iframe security errors
+    setTimeout(() => {
+      try {
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch {
+        window.location.href = url;
+      }
+    }, 0);
   };
 
   // Email Notification Helper
@@ -292,13 +363,28 @@ export default function App() {
       });
       const data = await res.json();
       if (data.success) {
-        alert(data.message || 'Email tagihan / pengingat berhasil dikirim!');
+        setAppAlert({
+          isOpen: true,
+          title: 'Email Terkirim',
+          message: data.message || 'Email tagihan / pengingat berhasil dikirim!',
+          type: 'success',
+        });
         fetchData();
       } else {
-        alert(data.error || 'Gagal mengirim email.');
+        setAppAlert({
+          isOpen: true,
+          title: 'Gagal Mengirim Email',
+          message: data.error || 'Terjadi kendala saat mengirim email.',
+          type: 'error',
+        });
       }
     } catch (e: any) {
-      alert('Terjadi kesalahan saat mengirim email: ' + e.message);
+      setAppAlert({
+        isOpen: true,
+        title: 'Error Pengiriman',
+        message: 'Terjadi kesalahan saat mengirim email: ' + (e?.message || 'Koneksi terputus'),
+        type: 'error',
+      });
     }
   };
 
@@ -309,13 +395,28 @@ export default function App() {
       const res = await fetch('/api/automation/run', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        alert(`Otomasi Penagihan Selesai!\nDipindai: ${data.scannedCount} invoice\nNotifikasi dieksekusi: ${data.triggeredCount}`);
+        setAppAlert({
+          isOpen: true,
+          title: 'Otomasi Penagihan Selesai',
+          message: `Dipindai: ${data.scannedCount} invoice | Notifikasi dieksekusi: ${data.triggeredCount}`,
+          type: 'success',
+        });
         fetchData();
       } else {
-        alert('Gagal menjalankan otomasi penagihan.');
+        setAppAlert({
+          isOpen: true,
+          title: 'Gagal Menjalankan Otomasi',
+          message: data.error || 'Terjadi kesalahan saat memproses otomasi penagihan.',
+          type: 'error',
+        });
       }
     } catch (err: any) {
-      alert('Error saat mengeksekusi otomasi: ' + err.message);
+      setAppAlert({
+        isOpen: true,
+        title: 'Error Eksekusi Otomasi',
+        message: 'Error saat mengeksekusi otomasi: ' + (err?.message || 'Koneksi error'),
+        type: 'error',
+      });
     } finally {
       setIsRunningAutomation(false);
     }
@@ -339,6 +440,33 @@ export default function App() {
     }
   };
 
+  // Generate Monthly Recurring Invoices
+  const handleGenerateMonthlyInvoices = async (params: {
+    monthStr?: string;
+    customDate?: string;
+    customDueDate?: string;
+    targetCustomerIds?: string[];
+    globalIncludeVpn?: boolean;
+    globalIncludeMonitoring?: boolean;
+    selectedAddonIds?: string[];
+    globalAddonIds?: string[];
+    pppoeBillingMethod?: 'monthly_average' | 'realtime';
+    perCustomerAddons?: Record<string, string[]>;
+    addonCustomerTargets?: Record<string, string[]>;
+  }) => {
+    const res = await fetch('/api/invoices/generate-monthly', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || data.error || 'Gagal membuat tagihan bulanan');
+    }
+    await fetchData();
+    return data;
+  };
+
   // Customer Management Handlers
   const handleSaveCustomer = async (customerData: Partial<CustomerRecord>) => {
     if (customerData.id) {
@@ -348,7 +476,13 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(customerData),
       });
-      if (!res.ok) throw new Error('Gagal memperbarui data pelanggan');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Gagal memperbarui data pelanggan');
+      if (data.customer) {
+        setCustomers((prev) =>
+          prev.map((c) => (c.id === data.customer.id ? { ...c, ...data.customer } : c))
+        );
+      }
     } else {
       // Create
       const res = await fetch('/api/customers', {
@@ -356,20 +490,27 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(customerData),
       });
-      if (!res.ok) throw new Error('Gagal menambahkan pelanggan');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Gagal menambahkan pelanggan');
+      if (data.customer) {
+        setCustomers((prev) => [data.customer, ...prev]);
+      }
     }
-    fetchData();
+    await fetchData();
   };
 
   const handleDeleteCustomer = async (id: string) => {
-    if (!window.confirm('Hapus pelanggan ini dari daftar?')) return;
     try {
       const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setCustomers((prev) => prev.filter((c) => c.id !== id));
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Gagal menghapus pelanggan');
       }
-    } catch (err) {
-      console.error(err);
+      setCustomers((prev) => prev.filter((c) => c.id !== id));
+      await fetchData();
+    } catch (err: any) {
+      console.error('Delete customer error:', err);
+      throw err;
     }
   };
 
@@ -399,16 +540,70 @@ export default function App() {
     fetchData();
   };
 
-  const handleDeleteService = async (id: string) => {
-    if (!window.confirm('Hapus item jasa ini dari katalog?')) return;
-    try {
-      const res = await fetch(`/api/services/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setServices((prev) => prev.filter((s) => s.id !== id));
-      }
-    } catch (err) {
-      console.error(err);
+  const handleDeleteService = (id: string) => {
+    const srv = services.find((s) => s.id === id);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Item Jasa',
+      message: `Apakah Anda yakin ingin menghapus "${srv?.name || 'layanan'}" dari katalog jasa? Tindakan ini tidak dapat dibatalkan.`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/services/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            setServices((prev) => prev.filter((s) => s.id !== id));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
+  };
+
+  // Recurring Addon Handlers
+  const handleSaveRecurringAddon = async (addonData: Partial<RecurringAddonService>) => {
+    if (addonData.id) {
+      const res = await fetch(`/api/recurring-addons/${addonData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addonData),
+      });
+      if (!res.ok) throw new Error('Gagal memperbarui layanan recurring');
+    } else {
+      const res = await fetch('/api/recurring-addons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addonData),
+      });
+      if (!res.ok) throw new Error('Gagal menambahkan layanan recurring');
     }
+    fetchData();
+  };
+
+  const handleDeleteRecurringAddon = async (id: string) => {
+    const addon = recurringAddons.find((a) => a.id === id);
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Layanan Recurring',
+      message: `Apakah Anda yakin ingin menghapus layanan recurring "${addon?.name || 'layanan'}"?`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/recurring-addons/${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            setRecurringAddons((prev) => prev.filter((a) => a.id !== id));
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      },
+    });
   };
 
   // Check and dispatch overdue reminders
@@ -417,10 +612,20 @@ export default function App() {
     try {
       const res = await fetch('/api/invoices/check-reminders', { method: 'POST' });
       const data = await res.json();
-      alert(`Pemeriksaan Jatuh Tempo Selesai:\n${data.message || 'Semua invoice telah diperiksa.'}`);
+      setAppAlert({
+        isOpen: true,
+        title: 'Pemeriksaan Jatuh Tempo Selesai',
+        message: data.message || 'Semua invoice telah diperiksa untuk jatuh tempo.',
+        type: 'success',
+      });
       fetchData();
     } catch (e: any) {
-      alert('Error saat mengecek jatuh tempo: ' + e.message);
+      setAppAlert({
+        isOpen: true,
+        title: 'Gagal Memeriksa Jatuh Tempo',
+        message: 'Error saat mengecek jatuh tempo: ' + (e?.message || 'Koneksi error'),
+        type: 'error',
+      });
     } finally {
       setIsCheckingReminders(false);
     }
@@ -433,13 +638,28 @@ export default function App() {
       const res = await fetch('/api/spreadsheet/sync', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        alert(`Sinkronisasi Google Spreadsheet Berhasil!\n${data.syncedCount} baris invoice diperbarui secara realtime.`);
+        setAppAlert({
+          isOpen: true,
+          title: 'Sinkronisasi Spreadsheet Berhasil',
+          message: `Sinkronisasi Google Spreadsheet berhasil! ${data.syncedCount} baris invoice diperbarui secara realtime.`,
+          type: 'success',
+        });
         fetchData();
       } else {
-        alert('Sinkronisasi gagal: ' + (data.error || 'Periksa konfigurasi sheet ID.'));
+        setAppAlert({
+          isOpen: true,
+          title: 'Sinkronisasi Gagal',
+          message: data.error || 'Periksa konfigurasi sheet ID pada menu Pengaturan.',
+          type: 'error',
+        });
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setAppAlert({
+        isOpen: true,
+        title: 'Error Sinkronisasi',
+        message: 'Gagal menghubungi server spreadsheet: ' + (e?.message || 'Koneksi error'),
+        type: 'error',
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -452,9 +672,30 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedSettings),
     });
-    if (!res.ok) throw new Error('Gagal memperbarui pengaturan');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Gagal memperbarui pengaturan');
+    }
     const data = await res.json();
-    setSettings(data.settings);
+    const newSettings = data?.settings || data;
+    setSettings(newSettings);
+    return newSettings;
+  };
+
+  // Reset Settings to Factory Defaults
+  const handleResetSettings = async () => {
+    const res = await fetch('/api/settings/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Gagal mereset pengaturan ke default');
+    }
+    const data = await res.json();
+    const newSettings = data?.settings || data;
+    setSettings(newSettings);
+    return newSettings;
   };
 
   // Switch portals and update URL hash cleanly
@@ -494,12 +735,15 @@ export default function App() {
       {activePortal === 'admin' ? (
         adminUser ? (
           <Navbar
+            settings={settings}
             currentTab={currentTab}
             onSelectTab={(tab) => {
               if (tab === 'qris') {
                 setIsQrisModalOpen(true);
               } else if (tab === 'portal') {
                 handleSwitchToCustomerPortal();
+              } else if (tab === 'spreadsheet') {
+                handleOpenSettings('backup');
               } else {
                 setCurrentTab(tab);
               }
@@ -509,7 +753,7 @@ export default function App() {
               setEditingInvoice(null);
               setIsCreateModalOpen(true);
             }}
-            onOpenSettings={() => setIsSettingsModalOpen(true)}
+            onOpenSettings={handleOpenSettings}
             isConnected={isConnected}
             notifications={notifications}
             unreadCount={unreadCount}
@@ -524,12 +768,18 @@ export default function App() {
           <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
             <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-500 text-white shadow-md shadow-blue-500/20">
-                  <FileText className="h-5 w-5" />
-                </div>
+                {settings?.appLogoUrl ? (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-200 overflow-hidden shadow-xs p-1">
+                    <img src={settings.appLogoUrl} alt={settings?.appName || 'Logo'} className="max-h-full max-w-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-500 text-white shadow-md shadow-blue-500/20">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                )}
                 <div>
                   <h1 className="text-base font-black tracking-tight text-slate-900 leading-tight">
-                    {settings?.businessName || 'InvoiceKilat'}
+                    {settings?.appName || settings?.businessName || 'InvoiceKilat'}
                   </h1>
                   <p className="text-[11px] font-bold text-blue-600 flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" />
@@ -552,7 +802,8 @@ export default function App() {
         )
       ) : (
         <CustomerPortalNavbar
-          businessName={settings?.businessName || 'InvoiceKilat'}
+          settings={settings}
+          businessName={settings?.appName || settings?.businessName || 'InvoiceKilat'}
           onSwitchToAdmin={() => handleSwitchToAdminPortal('invoices')}
         />
       )}
@@ -567,6 +818,7 @@ export default function App() {
         ) : activePortal === 'customer' ? (
           /* ================= PORTAL MANDIRI PELANGGAN (KLIEN/PUBLIK) ================= */
           <CustomerPortal
+            settings={settings}
             initialSearchQuery={portalSearchQuery}
             initialInvoiceNumber={portalInvoiceNumber}
             onBackToAdmin={() => handleSwitchToAdminPortal('invoices')}
@@ -578,7 +830,7 @@ export default function App() {
           <AdminLogin
             onLoginSuccess={handleAdminLoginSuccess}
             onGoToCustomerPortal={() => handleSwitchToCustomerPortal()}
-            businessName={settings?.businessName || 'InvoiceKilat'}
+            businessName={settings?.appName || settings?.businessName || 'InvoiceKilat'}
           />
         ) : (
           /* ================= PORTAL PENGELOLA / ADMIN USAHA ================= */
@@ -609,6 +861,7 @@ export default function App() {
                   setEditingInvoice(null);
                   setIsCreateModalOpen(true);
                 }}
+                onOpenGenerateMonthly={() => setCurrentTab('automation')}
                 onOpenPaymentModal={(inv) => setPaymentInvoice(inv)}
                 onOpenEditInvoice={(inv) => {
                   setEditingInvoice(inv);
@@ -629,7 +882,10 @@ export default function App() {
               <CustomerDirectory
                 customers={customers}
                 invoices={invoices}
+                recurringAddons={recurringAddons}
                 onSaveCustomer={handleSaveCustomer}
+                onUpdateCustomer={(id, data) => handleSaveCustomer({ ...data, id })}
+                onAddCustomer={(data) => handleSaveCustomer(data)}
                 onDeleteCustomer={handleDeleteCustomer}
                 onCreateInvoiceForCustomer={handleCreateInvoiceForCustomer}
                 onOpenPortalForCustomer={(query) => {
@@ -642,8 +898,11 @@ export default function App() {
             {currentTab === 'services' && (
               <ServiceCatalog
                 services={services}
+                recurringAddons={recurringAddons}
                 onSaveService={handleSaveService}
                 onDeleteService={handleDeleteService}
+                onSaveRecurringAddon={handleSaveRecurringAddon}
+                onDeleteRecurringAddon={handleDeleteRecurringAddon}
               />
             )}
 
@@ -652,8 +911,16 @@ export default function App() {
               <BillingAutomationCenter
                 rules={automationRules}
                 logs={automationLogs}
+                customers={customers}
+                recurringAddons={recurringAddons}
+                settings={settings}
                 onToggleRule={handleToggleAutomationRule}
                 onRunAutomation={handleRunAutomation}
+                onGenerateMonthlyInvoices={handleGenerateMonthlyInvoices}
+                onRefreshData={fetchData}
+                onNavigateToInvoice={(invId) => {
+                  setSelectedInvoiceId(invId);
+                }}
                 isRunning={isRunningAutomation}
               />
             )}
@@ -666,11 +933,15 @@ export default function App() {
                 onTriggerSync={handleTriggerSpreadsheetSync}
                 isSyncing={isSyncing}
                 onSelectInvoice={(id) => setSelectedInvoiceId(id)}
+                onOpenSettings={() => handleOpenSettings('backup')}
               />
             )}
           </>
         )}
       </main>
+
+      {/* Global In-App Footer Watermark Banner */}
+      <AppWatermark settings={settings} mode="banner" />
 
       {/* Modals */}
       {/* 1. Invoice Detail & QRIS View */}
@@ -730,7 +1001,111 @@ export default function App() {
         onClose={() => setIsSettingsModalOpen(false)}
         settings={settings}
         onSave={handleSaveSettings}
+        onReset={handleResetSettings}
+        initialTab={settingsInitialTab}
+        invoices={invoices}
+        onTriggerSync={handleTriggerSpreadsheetSync}
+        isSyncing={isSyncing}
       />
+
+      {/* 7. In-App Confirmation Modal (Cross-origin & Iframe Safe) */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-4">
+              <div
+                className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                  confirmDialog.isDestructive
+                    ? 'bg-rose-50 text-rose-600'
+                    : 'bg-blue-50 text-blue-600'
+                }`}
+              >
+                {confirmDialog.isDestructive ? (
+                  <Trash2 className="w-5 h-5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-slate-900 mb-1">
+                  {confirmDialog.title}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {confirmDialog.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+              >
+                {confirmDialog.cancelText || 'Batal'}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDialog.onConfirm}
+                className={`px-4 py-2 rounded-xl text-xs font-bold text-white shadow-xs transition active:scale-95 ${
+                  confirmDialog.isDestructive
+                    ? 'bg-rose-600 hover:bg-rose-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {confirmDialog.confirmText || 'Konfirmasi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. In-App Notification / Alert Modal */}
+      {appAlert.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-4">
+              <div
+                className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                  appAlert.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : appAlert.type === 'error'
+                    ? 'bg-rose-50 text-rose-600'
+                    : 'bg-blue-50 text-blue-600'
+                }`}
+              >
+                {appAlert.type === 'success' ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : appAlert.type === 'error' ? (
+                  <AlertCircle className="w-5 h-5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-slate-900 mb-1">
+                  {appAlert.title}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                  {appAlert.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setAppAlert((prev) => ({ ...prev, isOpen: false }))}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-xs transition active:scale-95"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating watermark removed as requested by user */}
     </div>
   );
 }

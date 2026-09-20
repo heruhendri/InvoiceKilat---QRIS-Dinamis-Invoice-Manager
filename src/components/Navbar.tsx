@@ -22,16 +22,17 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
-import { RealtimeEvent, AdminUser } from '../types';
+import { RealtimeEvent, AdminUser, BusinessSettings } from '../types';
 import { formatDateTimeIndo } from '../utils/formatters';
 
 export type AppNavTab = 'dashboard' | 'invoices' | 'customers' | 'services' | 'automation' | 'qris' | 'spreadsheet' | 'portal';
 
 interface NavbarProps {
+  settings?: BusinessSettings | null;
   currentTab: AppNavTab;
   onSelectTab: (tab: AppNavTab) => void;
   onOpenCreateInvoice: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (initialTab?: 'app' | 'company' | 'template' | 'qris' | 'backup' | 'notification') => void;
   isConnected: boolean;
   notifications: RealtimeEvent[];
   unreadCount: number;
@@ -44,6 +45,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
+  settings,
   currentTab,
   onSelectTab,
   onOpenCreateInvoice,
@@ -60,6 +62,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const appName = settings?.appName || 'InvoiceKilat';
+  const logoUrl = settings?.appLogoUrl || settings?.companyLogoUrl;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
@@ -70,13 +76,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => onSelectTab('dashboard')} 
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-              <QrCode className="h-5 w-5" />
-            </div>
+            {logoUrl ? (
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-200 overflow-hidden shadow-xs group-hover:scale-105 transition-transform p-1">
+                <img src={logoUrl} alt={appName} className="max-h-full max-w-full object-contain" />
+              </div>
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                <QrCode className="h-5 w-5" />
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-base tracking-tight text-slate-900">
-                  Invoice<span className="text-blue-600">Kilat</span>
+                  {appName}
                 </span>
                 <span className="rounded-md bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
                   Admin
@@ -154,19 +166,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Zap className="h-3.5 w-3.5 text-amber-500" />
               <span>Otomasi Tagihan</span>
-            </button>
-
-            <button
-              id="tab-spreadsheet-btn"
-              onClick={() => onSelectTab('spreadsheet')}
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
-                currentTab === 'spreadsheet'
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <TableProperties className="h-3.5 w-3.5" />
-              <span>Spreadsheet</span>
             </button>
 
             <button
@@ -285,7 +284,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Settings Button */}
           <button
             id="settings-modal-btn"
-            onClick={onOpenSettings}
+            onClick={() => onOpenSettings('app')}
             className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
             title="Pengaturan Profil Bisnis & QRIS"
             aria-label="Pengaturan"
@@ -337,12 +336,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       onClick={() => {
                         setShowUserDropdown(false);
-                        onOpenSettings();
+                        onOpenSettings('app');
                       }}
                       className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-2 transition"
                     >
                       <Settings className="w-4 h-4 text-slate-400" />
                       <span>Pengaturan Bisnis & Akun</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        onOpenSettings('backup');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-medium text-teal-700 hover:bg-teal-50 rounded-xl flex items-center gap-2 transition"
+                    >
+                      <TableProperties className="w-4 h-4 text-teal-600" />
+                      <span>Google Sheets & Backup Data</span>
                     </button>
 
                     <button
@@ -363,9 +373,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         id="admin-logout-btn"
                         onClick={() => {
                           setShowUserDropdown(false);
-                          if (window.confirm('Yakin ingin keluar dari akun admin?')) {
-                            onLogout();
-                          }
+                          setShowLogoutConfirm(true);
                         }}
                         className="w-full text-left px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl flex items-center gap-2 transition"
                       >
@@ -445,21 +453,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
 
         <button
-          onClick={() => onSelectTab('spreadsheet')}
+          onClick={() => onSelectTab('portal')}
           className={`flex flex-col items-center py-1 px-2 rounded-lg shrink-0 ${
-            currentTab === 'spreadsheet' ? 'text-blue-700 font-bold bg-blue-50' : 'text-slate-600'
+            currentTab === 'portal' ? 'text-emerald-700 font-bold bg-emerald-50' : 'text-slate-600'
           }`}
         >
-          <TableProperties className="h-4 w-4" />
-          <span className="text-[10px] mt-0.5">Sheets</span>
+          <Globe className="h-4 w-4 text-emerald-600" />
+          <span className="text-[10px] mt-0.5">Portal</span>
         </button>
 
         {onLogout && (
           <button
             onClick={() => {
-              if (window.confirm('Yakin ingin keluar dari akun admin?')) {
-                onLogout();
-              }
+              setShowLogoutConfirm(true);
             }}
             className="flex flex-col items-center py-1 px-2 rounded-lg shrink-0 text-rose-600 hover:bg-rose-50"
             title="Keluar Admin"
@@ -469,6 +475,42 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && onLogout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+              <LogOut className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 mb-1">
+              Keluar Akun Admin?
+            </h3>
+            <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+              Anda akan keluar dari sesi admin saat ini. Anda dapat masuk kembali kapan saja dengan kredensial admin Anda.
+            </p>
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  onLogout();
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-xs transition active:scale-95"
+              >
+                Ya, Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

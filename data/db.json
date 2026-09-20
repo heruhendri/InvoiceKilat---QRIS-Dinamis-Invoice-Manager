@@ -1,16 +1,57 @@
 {
   "settings": {
+    "appName": "InvoiceKilat",
+    "appLogoUrl": "",
+    "appTagline": "Sistem Faktur & QRIS Dinamis Otomatis",
     "businessName": "PT Cipta Media Nusantara",
+    "companyLogoUrl": "",
+    "businessTagline": "Solusi Teknologi & Transformasi Digital",
     "businessOwner": "Budi Santoso",
     "businessPhone": "6281298765432",
     "businessEmail": "billing@ciptamedia.id",
     "businessAddress": "Jl. Sudirman No. 45 Kav. 8, Senayan, Jakarta Pusat 10270",
+    "businessWebsite": "https://ciptamedia.id",
+    "businessTaxId": "01.234.567.8-012.000",
     "businessLogoUrl": "",
+    "bankName": "BCA",
+    "bankAccountNumber": "8730918231",
+    "bankAccountHolder": "PT Cipta Media Nusantara",
+    "bcaAccountNumber": "8730918231",
+    "bcaAccountHolder": "PT Cipta Media Nusantara / Heruhendri",
+    "briAccountNumber": "012301098765501",
+    "briAccountHolder": "PT Cipta Media Nusantara / Heruhendri",
+    "danaNumber": "08977345640",
+    "danaAccountHolder": "Heruhendri",
+    "gojekNumber": "08977345640",
+    "gojekAccountHolder": "Heruhendri",
+    "watermarkText": "Aplikasi ini dibuat oleh Heru Hendri • Contact Person: 08977345640",
+    "showAppWatermark": true,
+    "appWatermarkPosition": "bottom-bar",
+    "recurringBilling": {
+      "enabled": true,
+      "generateDay": 1,
+      "dateOption": "system",
+      "dueDateOption": "system",
+      "dueDaysOffset": 10,
+      "includeVpn": true,
+      "includeMonitoring": true,
+      "defaultVpnPrice": 50000,
+      "defaultMonitoringPrice": 250000,
+      "lastGeneratedMonth": "2026-09"
+    },
+    "signatureImageUrl": "",
+    "stampImageUrl": "",
+    "signatoryName": "Budi Santoso",
+    "signatoryTitle": "Direktur",
+    "defaultInvoiceTemplate": "corporate",
     "defaultStaticQris": "00020101021126590014ID.DANA.WWW0118936009153000000001021000000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200210000010303UMI5204541153033605802ID5914DANA BISNIS MER59146007JAKARTA6105123406304ABCD",
     "qrisMerchantName": "DANA BISNIS CIPTA MEDIA",
     "qrisMerchantCity": "JAKARTA",
-    "googleSheetWebhookUrl": "https://script.google.com/macros/s/AKfycbz_SAMPLE_APP_SCRIPT_URL_INVOICE_SYNC/exec",
+    "googleSheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
+    "googleSheetName": "Master_Invoice_DB",
+    "googleSheetWebhookUrl": "",
     "lastSpreadsheetSync": "2026-09-17T12:51:11.254Z",
+    "autoBackupToSheets": true,
     "whatsappNotificationEnabled": true,
     "whatsappTemplate": "Halo *{{customer_name}}*, terima kasih! Pembayaran invoice *{{invoice_number}}* sebesar *Rp {{amount}}* telah BERHASIL kami terima dan diverifikasi oleh sistem. Status invoice saat ini: *LUNAS*. Detail invoice: {{invoice_url}}",
     "emailNotificationEnabled": true,
@@ -23,6 +64,192 @@
     "preDueEmailTemplate": "Pengingat Pembayaran: Invoice {{invoice_number}} senilai Rp {{amount}} akan jatuh tempo pada {{due_date}}. Segera lakukan pembayaran untuk menghindari denda."
   },
   "invoices": [
+    {
+      "id": "inv-inv-202609-005",
+      "invoiceNumber": "INV-202609-005",
+      "date": "2026-09-01",
+      "dueDate": "2026-09-10",
+      "status": "overdue",
+      "customer": {
+        "id": "cust-3",
+        "name": "Dewi Lestari",
+        "company": "Klinik Medika Sehat",
+        "email": "dewi.lestari@medikasehat.id",
+        "phone": "6285712345678",
+        "address": "Jl. Riau No. 88, Bandung",
+        "customerMode": "biasa"
+      },
+      "items": [
+        {
+          "id": "item-1789883512102-1tms",
+          "description": "Langganan Layanan Bulanan & Support Periode September 2026",
+          "quantity": 1,
+          "price": 1500000,
+          "total": 1500000
+        },
+        {
+          "id": "item-1789883512103-wpiz",
+          "description": "Layanan VPN Remote Mikrotik & Cloud Tunnel Dedicated Periode September 2026",
+          "quantity": 1,
+          "price": 50000,
+          "total": 50000
+        },
+        {
+          "id": "item-1789883512103-vfbc",
+          "description": "Biaya Monitoring Jaringan NOC & Server 24/7 (Realtime Alert WA/Telegram) Periode September 2026",
+          "quantity": 1,
+          "price": 250000,
+          "total": 250000
+        }
+      ],
+      "subtotal": 1800000,
+      "taxPercent": 11,
+      "taxAmount": 198000,
+      "discountAmount": 0,
+      "totalAmount": 1998000,
+      "paidAmount": 0,
+      "notes": "Tagihan rutin bulanan periode September 2026. Termasuk rincian layanan utama, VPN Remote, dan Biaya Monitoring. Pembayaran dapat dilakukan secara instan via QRIS Dinamis terlampir sebelum jatuh tempo.",
+      "paymentTerms": "Jatuh tempo pembayaran maksimal tanggal 2026-09-10.",
+      "staticQris": "00020101021126590014ID.DANA.WWW0118936009153000000001021000000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200210000010303UMI5204541153033605802ID5914DANA BISNIS MER59146007JAKARTA6105123406304ABCD",
+      "dynamicQris": "00020101021226590014ID.DANA.WWW0118936009153000000001021000000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200210000010303UMI520454071998000ID5914DANA BISNIS MER59146007JAKARTA61051234062180114INV-202609-00563040B30",
+      "dynamicQrisDataUrl": "data:image/png;base64,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",
+      "transactions": [],
+      "reminders": [],
+      "whatsappNotified": false,
+      "spreadsheetSynced": false,
+      "createdAt": "2026-09-20T05:51:52.127Z",
+      "updatedAt": "2026-09-20T05:51:52.127Z"
+    },
+    {
+      "id": "inv-inv-202609-003",
+      "invoiceNumber": "INV-202609-003",
+      "date": "2026-09-01",
+      "dueDate": "2026-09-10",
+      "status": "overdue",
+      "customer": {
+        "id": "cust-2",
+        "name": "Siti Rahmawati",
+        "company": "PT Global Solusindo Nusantara",
+        "email": "siti.rahma@globalsolusindo.com",
+        "phone": "6281398761234",
+        "address": "Wisma Mandiri Lt. 14, Jakarta Selatan",
+        "customerMode": "biasa"
+      },
+      "items": [
+        {
+          "id": "item-1789883512074-w397",
+          "description": "Langganan Layanan Bulanan & Support Periode September 2026",
+          "quantity": 1,
+          "price": 1500000,
+          "total": 1500000
+        },
+        {
+          "id": "item-1789883512074-hfd2",
+          "description": "Layanan VPN Remote Mikrotik & Cloud Tunnel Dedicated Periode September 2026",
+          "quantity": 1,
+          "price": 50000,
+          "total": 50000
+        },
+        {
+          "id": "item-1789883512074-fhss",
+          "description": "Biaya Monitoring Jaringan NOC & Server 24/7 (Realtime Alert WA/Telegram) Periode September 2026",
+          "quantity": 1,
+          "price": 250000,
+          "total": 250000
+        }
+      ],
+      "subtotal": 1800000,
+      "taxPercent": 11,
+      "taxAmount": 198000,
+      "discountAmount": 0,
+      "totalAmount": 1998000,
+      "paidAmount": 0,
+      "notes": "Tagihan rutin bulanan periode September 2026. Termasuk rincian layanan utama, VPN Remote, dan Biaya Monitoring. Pembayaran dapat dilakukan secara instan via QRIS Dinamis terlampir sebelum jatuh tempo.",
+      "paymentTerms": "Jatuh tempo pembayaran maksimal tanggal 2026-09-10.",
+      "staticQris": "00020101021126590014ID.DANA.WWW0118936009153000000001021000000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200210000010303UMI5204541153033605802ID5914DANA BISNIS MER59146007JAKARTA6105123406304ABCD",
+      "dynamicQris": "00020101021226590014ID.DANA.WWW0118936009153000000001021000000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200210000010303UMI520454071998000ID5914DANA BISNIS MER59146007JAKARTA61051234062180114INV-202609-0036304C6B5",
+      "dynamicQrisDataUrl": "data:image/png;base64,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",
+      "transactions": [],
+      "reminders": [],
+      "whatsappNotified": false,
+      "spreadsheetSynced": false,
+      "createdAt": "2026-09-20T05:51:52.102Z",
+      "updatedAt": "2026-09-20T05:51:52.102Z"
+    },
+    {
+      "id": "inv-inv-202609-001",
+      "invoiceNumber": "INV-202609-001",
+      "date": "2026-09-01",
+      "dueDate": "2026-09-10",
+      "status": "overdue",
+      "customer": {
+        "id": "cust-noc-1",
+        "name": "Heru Pratama (ISP NetNusantara)",
+        "company": "PT Net Nusantara Fiber",
+        "email": "noc@netnusantara.net.id",
+        "phone": "6281299887766",
+        "address": "Gedung Cyber 1 Lt. 8, Jl. Kuningan Barat, Jakarta Selatan",
+        "customerMode": "noc",
+        "mikrotik": {
+          "routerName": "CCR1009-Core-NetNusa",
+          "host": "103.145.22.10",
+          "port": 8728,
+          "username": "api-monitoring",
+          "ratePerUser": 5000,
+          "isolirProfileName": "isolir",
+          "connectionStatus": "connected",
+          "lastSyncedAt": "2026-09-20T05:29:51.280Z",
+          "totalPppoeSecrets": 125,
+          "activePppoeCount": 96,
+          "nonIsolirCount": 84,
+          "isolirCount": 12,
+          "systemIdentity": "CCR1009-Core-NetNusa",
+          "rosVersion": "v7.15.3",
+          "boardName": "CCR1009-7G-1C-1S+",
+          "uptime": "18w 4d 11h 45m"
+        }
+      },
+      "items": [
+        {
+          "id": "item-1789883512010-e5k0",
+          "description": "Layanan NOC & Bandwidth PPPoE [CCR1009-Core-NetNusa] Periode September 2026 (84 User Aktif @ Rp 5.000)",
+          "quantity": 84,
+          "price": 5000,
+          "total": 420000
+        },
+        {
+          "id": "item-1789883512013-dedh",
+          "description": "Layanan VPN Remote Mikrotik & Cloud Tunnel Dedicated Periode September 2026",
+          "quantity": 1,
+          "price": 50000,
+          "total": 50000
+        },
+        {
+          "id": "item-1789883512013-i68x",
+          "description": "Biaya Monitoring Jaringan NOC & Server 24/7 (Realtime Alert WA/Telegram) Periode September 2026",
+          "quantity": 1,
+          "price": 250000,
+          "total": 250000
+        }
+      ],
+      "subtotal": 720000,
+      "taxPercent": 11,
+      "taxAmount": 79200,
+      "discountAmount": 0,
+      "totalAmount": 799200,
+      "paidAmount": 0,
+      "notes": "Tagihan rutin bulanan periode September 2026. Termasuk rincian layanan utama, VPN Remote, dan Biaya Monitoring. Pembayaran dapat dilakukan secara instan via QRIS Dinamis terlampir sebelum jatuh tempo.",
+      "paymentTerms": "Jatuh tempo pembayaran maksimal tanggal 2026-09-10.",
+      "staticQris": "00020101021126590014ID.DANA.WWW0118936009153000000001021000000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200210000010303UMI5204541153033605802ID5914DANA BISNIS MER59146007JAKARTA6105123406304ABCD",
+      "dynamicQris": "00020101021226590014ID.DANA.WWW0118936009153000000001021000000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200210000010303UMI52045406799200ID5914DANA BISNIS MER59146007JAKARTA61051234062180114INV-202609-0016304262B",
+      "dynamicQrisDataUrl": "data:image/png;base64,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",
+      "transactions": [],
+      "reminders": [],
+      "whatsappNotified": false,
+      "spreadsheetSynced": false,
+      "createdAt": "2026-09-20T05:51:52.074Z",
+      "updatedAt": "2026-09-20T05:51:52.074Z"
+    },
     {
       "id": "inv-inv-2026-001",
       "invoiceNumber": "INV-2026-001",
@@ -217,6 +444,64 @@
   "remindersLog": [],
   "customers": [
     {
+      "id": "cust-noc-1",
+      "name": "Heru Pratama (ISP NetNusantara)",
+      "company": "PT Net Nusantara Fiber",
+      "email": "noc@netnusantara.net.id",
+      "phone": "6281299887766",
+      "address": "Gedung Cyber 1 Lt. 8, Jl. Kuningan Barat, Jakarta Selatan",
+      "notes": "Klien ISP RTRW Net Mitra - Kontrak Monitoring NOC & Pemeliharaan Mikrotik PPPoE",
+      "customerMode": "noc",
+      "mikrotik": {
+        "routerName": "CCR1009-Core-NetNusa",
+        "host": "103.145.22.10",
+        "port": 8728,
+        "username": "api-monitoring",
+        "ratePerUser": 5000,
+        "isolirProfileName": "isolir",
+        "connectionStatus": "connected",
+        "lastSyncedAt": "2026-09-20T05:29:51.280Z",
+        "totalPppoeSecrets": 125,
+        "activePppoeCount": 96,
+        "nonIsolirCount": 84,
+        "isolirCount": 12,
+        "systemIdentity": "CCR1009-Core-NetNusa",
+        "rosVersion": "v7.15.3",
+        "boardName": "CCR1009-7G-1C-1S+",
+        "uptime": "18w 4d 11h 45m",
+        "samples": [
+          {
+            "timestamp": "2026-09-01T08:00:00Z",
+            "activeCount": 99,
+            "nonIsolirCount": 90,
+            "isolirCount": 9
+          },
+          {
+            "timestamp": "2026-09-07T12:00:00Z",
+            "activeCount": 104,
+            "nonIsolirCount": 94,
+            "isolirCount": 10
+          },
+          {
+            "timestamp": "2026-09-14T15:30:00Z",
+            "activeCount": 102,
+            "nonIsolirCount": 91,
+            "isolirCount": 11
+          },
+          {
+            "timestamp": "2026-09-19T20:00:00Z",
+            "activeCount": 105,
+            "nonIsolirCount": 93,
+            "isolirCount": 12
+          }
+        ],
+        "monthlyAverageNonIsolir": 92
+      },
+      "createdAt": "2026-09-20T05:29:51.280Z",
+      "pppoeBillingMethod": "monthly_average",
+      "monthlyAveragePppoeCount": 92
+    },
+    {
       "id": "cust-1",
       "name": "Andi Pratama",
       "company": "CV Sinar Abadi Kreasi",
@@ -224,7 +509,8 @@
       "phone": "6281234567890",
       "address": "Jl. Pemuda No. 12, Surabaya",
       "notes": "Klien prioritas jasa software dan integrasi pembayaran",
-      "createdAt": "2026-09-17T13:01:19.630Z"
+      "customerMode": "biasa",
+      "createdAt": "2026-09-20T05:29:51.280Z"
     },
     {
       "id": "cust-2",
@@ -234,7 +520,8 @@
       "phone": "6281398761234",
       "address": "Wisma Mandiri Lt. 14, Jakarta Selatan",
       "notes": "Kontrak sistem QRIS dan WhatsApp gateway",
-      "createdAt": "2026-09-17T13:01:19.630Z"
+      "customerMode": "biasa",
+      "createdAt": "2026-09-20T05:29:51.280Z"
     },
     {
       "id": "cust-3",
@@ -244,7 +531,8 @@
       "phone": "6285712345678",
       "address": "Jl. Riau No. 88, Bandung",
       "notes": "Langganan maintenance bulanan",
-      "createdAt": "2026-09-17T13:01:19.630Z"
+      "customerMode": "biasa",
+      "createdAt": "2026-09-20T05:29:51.280Z"
     },
     {
       "id": "cust-4",
@@ -254,10 +542,56 @@
       "phone": "6281898765432",
       "address": "Jl. Malioboro No. 40, Yogyakarta",
       "notes": "Klien UI/UX design system",
-      "createdAt": "2026-09-17T13:01:19.630Z"
+      "customerMode": "biasa",
+      "createdAt": "2026-09-20T05:29:51.280Z"
     }
   ],
   "services": [
+    {
+      "id": "srv-vpn-1",
+      "name": "VPN Remote Mikrotik & Cloud Tunnel (L2TP/WireGuard/SSTP)",
+      "category": "Jaringan & VPN",
+      "unit": "Bulan",
+      "price": 50000,
+      "description": "Akses remote Winbox dan Webfig router Mikrotik dari luar jaringan secara aman tanpa IP publik statis.",
+      "createdAt": "2026-09-20T06:00:00.000Z"
+    },
+    {
+      "id": "srv-mon-1",
+      "name": "Biaya Monitoring Jaringan NOC & Router 24/7",
+      "category": "Monitoring & NOC",
+      "unit": "Bulan",
+      "price": 250000,
+      "description": "Monitoring traffic, latensi, uptime router Mikrotik, dan notifikasi alert real-time via WhatsApp/Telegram.",
+      "createdAt": "2026-09-20T06:00:00.000Z"
+    },
+    {
+      "id": "srv-vpn-2",
+      "name": "Sewa Port VPN Forwarding & Dedicated IP Publik Dinamis",
+      "category": "Jaringan & VPN",
+      "unit": "Bulan",
+      "price": 75000,
+      "description": "Port forwarding dedicated untuk API Mikrotik, billing server, dan web monitoring online 24 jam.",
+      "createdAt": "2026-09-20T06:00:00.000Z"
+    },
+    {
+      "id": "srv-mon-2",
+      "name": "Biaya Monitoring Server & Database Realtime 24/7",
+      "category": "Monitoring & NOC",
+      "unit": "Bulan",
+      "price": 350000,
+      "description": "Pemantauan performa server, beban CPU/RAM, backup database otomatis, dan laporan kesehatan sistem bulanan.",
+      "createdAt": "2026-09-20T06:00:00.000Z"
+    },
+    {
+      "id": "srv-isp-1",
+      "name": "Manajemen Bandwidth & Isolir Otomatis PPPoE ISP",
+      "category": "ISP & PPPoE",
+      "unit": "Bulan",
+      "price": 500000,
+      "description": "Pengelolaan antrean bandwidth, pemeliharaan pool IP PPPoE, dan otomatisasi isolir pelanggan jatuh tempo.",
+      "createdAt": "2026-09-20T06:00:00.000Z"
+    },
     {
       "id": "srv-1",
       "name": "Pengembangan Aplikasi Web & Mobile PWA",
@@ -357,6 +691,20 @@
   ],
   "automationLogs": [
     {
+      "id": "auto-1789883512127-monthly",
+      "invoiceId": "inv-inv-202609-001",
+      "invoiceNumber": "3 Tagihan Baru",
+      "customerName": "Semua Pelanggan (3 Klien)",
+      "customerPhone": "",
+      "customerEmail": "",
+      "ruleType": "Generate Tagihan Bulanan Otomatis (September 2026)",
+      "channel": "both",
+      "status": "generated",
+      "message": "Sistem berhasil menerbitkan 3 invoice tagihan bulanan periode September 2026 (Termasuk VPN Remote & Biaya Monitoring). Jatuh tempo: 2026-09-10.",
+      "dispatchedAt": "2026-09-20T05:51:52.127Z",
+      "amount": 4795200
+    },
+    {
       "id": "auto-1789650088237-xemrm",
       "invoiceId": "inv-inv-2026-002",
       "invoiceNumber": "INV-2026-002",
@@ -370,6 +718,71 @@
       "whatsappUrl": "https://wa.me/6281398761234?text=Pemberitahuan%20Tagihan%20Terlambat%3A%20Invoice%20*INV-2026-002*%20senilai%20*Rp%204.995.000*%20atas%20nama%20*Siti%20Rahmawati*%20telah%20MELEWATI%20TANGGAL%20JATUH%20TEMPO%20(2026-09-12).%20Mohon%20konfirmasi%20atau%20segera%20lunasi%20pembayaran%20melalui%20QRIS%20Dinamis%3A%20http%3A%2F%2Flocalhost%3A3000%2F%3Finvoice%3Dinv-inv-2026-002",
       "dispatchedAt": "2026-09-17T13:01:28.237Z",
       "amount": 4995000
+    }
+  ],
+  "adminUsers": [
+    {
+      "id": "admin-1",
+      "username": "admin",
+      "email": "admin@ciptamedia.id",
+      "name": "Budi Santoso",
+      "role": "superadmin",
+      "password": "admin123",
+      "avatarUrl": "",
+      "createdAt": "2026-09-20T04:06:37.891Z",
+      "lastLoginAt": "2026-09-20T06:14:28.650Z"
+    },
+    {
+      "id": "admin-2",
+      "username": "heruu2004",
+      "email": "heruu2004@gmail.com",
+      "name": "Heru (Super Admin)",
+      "role": "superadmin",
+      "password": "admin123",
+      "avatarUrl": "",
+      "createdAt": "2026-09-20T04:06:37.892Z"
+    }
+  ],
+  "recurringAddons": [
+    {
+      "id": "addon-vpn",
+      "name": "Layanan VPN Remote Mikrotik Dedicated",
+      "category": "Jaringan & VPN",
+      "price": 50000,
+      "unit": "Bulan",
+      "description": "Akses remote Winbox & Webfig Mikrotik via port forwarding VPN cloud tunnel 24/7.",
+      "enabledByDefault": true,
+      "createdAt": "2026-09-20T06:12:31.003Z"
+    },
+    {
+      "id": "addon-mon",
+      "name": "Biaya Monitoring Jaringan NOC 24/7",
+      "category": "Monitoring & NOC",
+      "price": 250000,
+      "unit": "Bulan",
+      "description": "Pemantauan latensi, link router Mikrotik, dan alert insiden otomatis via WhatsApp & Telegram.",
+      "enabledByDefault": true,
+      "createdAt": "2026-09-20T06:12:31.003Z"
+    },
+    {
+      "id": "addon-ip-public",
+      "name": "Sewa IP Publik Statis / Cloud Tunnel Dedicated",
+      "category": "Jaringan & VPN",
+      "price": 100000,
+      "unit": "Bulan",
+      "description": "Alokasi IP publik statis untuk server local, web portal, atau router Mikrotik utama.",
+      "enabledByDefault": false,
+      "createdAt": "2026-09-20T06:12:31.003Z"
+    },
+    {
+      "id": "addon-maintenance",
+      "name": "Jasa Pemeliharaan & Backup Config RouterOS Bulanan",
+      "category": "Maintenance & Support",
+      "price": 350000,
+      "unit": "Bulan",
+      "description": "Backup berkala konfigurasi RouterOS, firmware update berkala, dan optimasi firewall.",
+      "enabledByDefault": false,
+      "createdAt": "2026-09-20T06:12:31.003Z"
     }
   ]
 }

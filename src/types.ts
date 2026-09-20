@@ -6,6 +6,65 @@ export interface InvoiceItem {
   total: number;
 }
 
+export type CustomerMode = 'biasa' | 'noc';
+
+export interface PppoeActiveUser {
+  name: string;
+  service?: string;
+  callerId?: string;
+  address?: string;
+  uptime?: string;
+  profile?: string;
+  isIsolir: boolean;
+}
+
+export interface MikrotikSample {
+  timestamp: string;
+  activeCount: number;
+  nonIsolirCount: number;
+  isolirCount: number;
+}
+
+export interface MikrotikConfig {
+  routerName: string;
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  useSsl?: boolean;
+  ratePerUser: number; // e.g. 5000 - 10000, customizable
+  isolirProfileName?: string; // default 'isolir'
+
+  connectionStatus?: 'connected' | 'disconnected' | 'error' | 'testing';
+  lastSyncedAt?: string;
+  totalPppoeSecrets?: number;
+  activePppoeCount?: number;
+  nonIsolirCount?: number;
+  isolirCount?: number;
+  systemIdentity?: string;
+  rosVersion?: string;
+  boardName?: string;
+  uptime?: string;
+  activeUsersList?: PppoeActiveUser[];
+  lastErrorMessage?: string;
+
+  // Telemetri Sampel & Rata-rata Bulanan PPPoE
+  samples?: MikrotikSample[];
+  monthlyAverageNonIsolir?: number;
+  preferredBillingMethod?: 'monthly_average' | 'realtime';
+}
+
+export interface RecurringAddonService {
+  id: string;
+  name: string;
+  category?: string;
+  price: number;
+  description?: string;
+  unit?: string;
+  enabledByDefault?: boolean;
+  createdAt?: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -14,6 +73,15 @@ export interface Customer {
   company?: string;
   address?: string;
   notes?: string;
+  customerMode?: CustomerMode;
+  mikrotik?: MikrotikConfig;
+  recurringEnabled?: boolean;
+  includeVpn?: boolean;
+  includeMonitoring?: boolean;
+  recurringAddonIds?: string[];
+  pppoeBillingMethod?: 'monthly_average' | 'realtime';
+  monthlyAveragePppoeCount?: number;
+  customMonthlyAmount?: number;
 }
 
 export interface CustomerRecord extends Customer {
@@ -38,7 +106,7 @@ export interface PaymentTransaction {
   invoiceId: string;
   invoiceNumber: string;
   amount: number;
-  paymentMethod: 'qris_dinamis' | 'dana_bisnis' | 'bank_transfer' | 'cash' | 'other';
+  paymentMethod: 'qris_dinamis' | 'dana_bisnis' | 'bank_transfer' | 'cash' | 'bca' | 'bri' | 'dana' | 'gojek' | 'other';
   referenceNumber: string;
   notes?: string;
   proofUrl?: string;
@@ -116,22 +184,80 @@ export interface Invoice {
 }
 
 export interface BusinessSettings {
+  // Profil Aplikasi & Identitas Brand
+  appName?: string;
+  appLogoUrl?: string;
+  appTagline?: string;
+
+  // Profil Perusahaan / Usaha
   businessName: string;
+  companyLogoUrl?: string;
+  businessTagline?: string;
   businessOwner: string;
   businessPhone: string;
   businessEmail: string;
   businessAddress: string;
+  businessWebsite?: string;
+  businessTaxId?: string; // NPWP / NIB
   businessLogoUrl: string;
-  
+
+  // Informasi Rekening Pembayaran
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountHolder?: string;
+
+  // Akun Pembayaran Khusus (BCA, BRI, DANA, Gojek)
+  bcaAccountNumber?: string;
+  bcaAccountHolder?: string;
+  briAccountNumber?: string;
+  briAccountHolder?: string;
+  danaNumber?: string;
+  danaAccountHolder?: string;
+  gojekNumber?: string;
+  gojekAccountHolder?: string;
+
+  // Watermark Footer Invoice & Aplikasi
+  watermarkText?: string;
+  showAppWatermark?: boolean;
+  appWatermarkPosition?: 'bottom-bar' | 'floating' | 'subtle-background';
+
+  // Pengaturan Otomasi Tagihan Bulanan (Recurring Invoicing)
+  recurringBilling?: {
+    enabled: boolean;
+    generateDay: number; // e.g. 1 (awal bulan), 5, 10, 20
+    dateOption?: 'system' | 'custom';
+    customIssueDay?: number;
+    dueDateOption: 'system' | 'custom';
+    dueDaysOffset: number; // e.g. 10 (Jatuh tempo tgl 10 atau +7 hari)
+    customDueDay?: number;
+    includeVpn: boolean;
+    includeMonitoring: boolean;
+    defaultVpnPrice?: number;
+    defaultMonitoringPrice?: number;
+    lastGeneratedMonth?: string; // e.g. '2026-09'
+  };
+
+  // Tanda Tangan & Cap Stempel Digital untuk PDF Invoice
+  signatureImageUrl?: string;
+  stampImageUrl?: string;
+  signatoryName?: string;
+  signatoryTitle?: string;
+
+  // Template Default Invoice
+  defaultInvoiceTemplate?: 'corporate' | 'minimalist' | 'creative' | 'formal' | 'pos';
+
+  // QRIS Pembayaran
   defaultStaticQris: string;
   qrisMerchantName: string;
   qrisMerchantCity: string;
   qrisUploadedImageUrl?: string;
 
+  // Google Sheets & Backup
   googleSheetId?: string;
   googleSheetName?: string;
   googleSheetWebhookUrl: string;
   lastSpreadsheetSync?: string;
+  autoBackupToSheets?: boolean;
 
   whatsappNotificationEnabled: boolean;
   whatsappTemplate: string;

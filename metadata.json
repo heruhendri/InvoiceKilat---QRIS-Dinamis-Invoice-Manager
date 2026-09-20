@@ -1,6 +1,8 @@
 {
-  "name": "InvoiceKilat - QRIS Dinamis & Invoice Manager",
-  "description": "Aplikasi invoice bisnis siap hosting dan mobile PWA dengan generator QRIS dinamis otomatis dari QRIS statis DANA Bisnis, sinkronisasi antar perangkat, notifikasi real-time pembayaran WhatsApp & Email, serta integrasi Google Spreadsheet.",
+  "name": "InvoiceKilat - QRIS Dinamis \u0026 Invoice Manager",
+  "description": "Aplikasi invoice bisnis siap hosting dan mobile PWA dengan generator QRIS dinamis otomatis dari QRIS statis DANA Bisnis, sinkronisasi antar perangkat, notifikasi real-time pembayaran WhatsApp \u0026 Email, serta integrasi Google Spreadsheet.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

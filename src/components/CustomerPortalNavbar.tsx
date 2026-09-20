@@ -1,34 +1,46 @@
 import React from 'react';
-import { QrCode, ShieldCheck, ArrowRight, Lock, ExternalLink, Phone, FileText } from 'lucide-react';
+import { QrCode, ShieldCheck, ArrowRight, Lock } from 'lucide-react';
+import { BusinessSettings } from '../types';
 
 interface CustomerPortalNavbarProps {
+  settings?: BusinessSettings | null;
   businessName?: string;
   onSwitchToAdmin: () => void;
 }
 
 export const CustomerPortalNavbar: React.FC<CustomerPortalNavbarProps> = ({
-  businessName = 'InvoiceKilat',
+  settings,
+  businessName,
   onSwitchToAdmin,
 }) => {
+  const displayTitle = settings?.appName || businessName || settings?.businessName || 'InvoiceKilat';
+  const logoUrl = settings?.appLogoUrl || settings?.companyLogoUrl;
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-2xs">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8">
         {/* Brand & Customer Portal Tag */}
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-cyan-700 text-white shadow-md shadow-emerald-600/20">
-            <QrCode className="h-5 w-5" />
-          </div>
+          {logoUrl ? (
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-200 overflow-hidden shadow-xs p-1">
+              <img src={logoUrl} alt={displayTitle} className="max-h-full max-w-full object-contain" />
+            </div>
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-cyan-700 text-white shadow-md shadow-emerald-600/20">
+              <QrCode className="h-5 w-5" />
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-base tracking-tight text-slate-900">
-                {businessName}
+                {displayTitle}
               </span>
               <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800 uppercase tracking-wider border border-emerald-200">
                 Portal Pelanggan
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
-              Pengecekan Tagihan & Pembayaran QRIS Resmi Terverifikasi
+              {settings?.businessName ? `Layanan Resmi ${settings.businessName}` : 'Pengecekan Tagihan & Pembayaran QRIS Resmi Terverifikasi'}
             </p>
           </div>
         </div>

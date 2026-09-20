@@ -98,3 +98,63 @@ export function getStatusDetails(status: string): {
       };
   }
 }
+
+export function getPaymentMethodDetails(method: string): {
+  label: string;
+  badgeClass: string;
+  color: string;
+} {
+  switch (method?.toLowerCase()) {
+    case 'bca':
+      return {
+        label: 'Bank BCA',
+        badgeClass: 'bg-blue-100 text-blue-800 border-blue-200',
+        color: 'blue',
+      };
+    case 'bri':
+      return {
+        label: 'Bank BRI',
+        badgeClass: 'bg-sky-100 text-sky-800 border-sky-200',
+        color: 'sky',
+      };
+    case 'dana':
+    case 'dana_bisnis':
+      return {
+        label: 'DANA',
+        badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+        color: 'cyan',
+      };
+    case 'gojek':
+    case 'gopay':
+      return {
+        label: 'Gojek (GoPay)',
+        badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        color: 'emerald',
+      };
+    case 'qris_dinamis':
+      return {
+        label: 'QRIS Dinamis',
+        badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
+        color: 'purple',
+      };
+    case 'cash':
+      return {
+        label: 'Tunai (Cash)',
+        badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+        color: 'amber',
+      };
+    case 'bank_transfer':
+      return {
+        label: 'Transfer Bank',
+        badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+        color: 'indigo',
+      };
+    default:
+      return {
+        label: method ? method.replace(/_/g, ' ').toUpperCase() : 'Lainnya',
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+        color: 'slate',
+      };
+  }
+}
+
