@@ -33,6 +33,7 @@ interface AnalyticsDashboardProps {
   onOpenCreateInvoice: () => void;
   onTriggerCheckReminders: () => void;
   isCheckingReminders: boolean;
+  onOpenGallery?: () => void;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
@@ -42,6 +43,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   onOpenCreateInvoice,
   onTriggerCheckReminders,
   isCheckingReminders,
+  onOpenGallery,
 }) => {
   if (!analytics) {
     return (
@@ -180,7 +182,19 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {onOpenGallery && (
+            <button
+              id="dash-open-gallery-btn"
+              onClick={onOpenGallery}
+              className="flex items-center gap-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 px-3.5 py-2.5 text-xs font-bold text-amber-200 transition active:scale-95"
+              title="Lihat screenshot tampilan fitur aplikasi"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Screenshot Fitur</span>
+            </button>
+          )}
+
           <button
             id="run-reminders-check-btn"
             onClick={onTriggerCheckReminders}

@@ -19,6 +19,10 @@ async function startServer() {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Explicit static file serving for public assets and screenshots (both dev and prod)
+  app.use('/public', express.static(path.join(process.cwd(), 'public')));
+  app.use('/screenshots', express.static(path.join(process.cwd(), 'public', 'screenshots')));
+
   // Vite middleware in development vs static dist in production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

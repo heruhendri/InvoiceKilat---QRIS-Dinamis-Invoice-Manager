@@ -24,6 +24,7 @@ import { CustomerPortal } from './components/CustomerPortal';
 import { CustomerPortalNavbar } from './components/CustomerPortalNavbar';
 import { AdminLogin } from './components/AdminLogin';
 import { AppWatermark } from './components/AppWatermark';
+import { FeatureGalleryModal } from './components/FeatureGalleryModal';
 import { FileText, ShieldCheck, Globe, AlertCircle, CheckCircle2, Trash2, X } from 'lucide-react';
 
 import { useRealtimeSync } from './hooks/useRealtimeSync';
@@ -84,6 +85,7 @@ export default function App() {
   const [isQrisModalOpen, setIsQrisModalOpen] = useState<boolean>(false);
   const [printInvoice, setPrintInvoice] = useState<Invoice | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'app' | 'company' | 'template' | 'qris' | 'backup' | 'notification'>('app');
 
   const handleOpenSettings = (tab?: any) => {
@@ -763,6 +765,7 @@ export default function App() {
             isSyncing={isSyncing}
             adminUser={adminUser}
             onLogout={handleAdminLogout}
+            onOpenGallery={() => setIsGalleryModalOpen(true)}
           />
         ) : (
           <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
@@ -848,6 +851,7 @@ export default function App() {
                 }}
                 onTriggerCheckReminders={handleTriggerCheckReminders}
                 isCheckingReminders={isCheckingReminders}
+                onOpenGallery={() => setIsGalleryModalOpen(true)}
               />
             )}
 
@@ -1006,6 +1010,12 @@ export default function App() {
         invoices={invoices}
         onTriggerSync={handleTriggerSpreadsheetSync}
         isSyncing={isSyncing}
+      />
+
+      {/* 6b. Feature Screenshots Gallery Modal */}
+      <FeatureGalleryModal
+        isOpen={isGalleryModalOpen}
+        onClose={() => setIsGalleryModalOpen(false)}
       />
 
       {/* 7. In-App Confirmation Modal (Cross-origin & Iframe Safe) */}

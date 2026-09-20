@@ -19,7 +19,8 @@ import {
   LogOut,
   User,
   ChevronDown,
-  ShieldCheck
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
 import { RealtimeEvent, AdminUser, BusinessSettings } from '../types';
@@ -42,6 +43,7 @@ interface NavbarProps {
   isSyncing: boolean;
   adminUser?: AdminUser | null;
   onLogout?: () => void;
+  onOpenGallery?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -59,6 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isSyncing,
   adminUser,
   onLogout,
+  onOpenGallery,
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -270,6 +273,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
+          {/* Feature Gallery / Screenshot Button */}
+          {onOpenGallery && (
+            <button
+              id="nav-open-gallery-btn"
+              onClick={onOpenGallery}
+              className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-700 px-2.5 py-1.5 text-xs font-bold transition shadow-2xs"
+              title="Lihat Screenshot & Tampilan Lengkap Fitur Aplikasi"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+              <span className="hidden sm:inline">Screenshot Fitur</span>
+            </button>
+          )}
+
           {/* Quick Switch to Customer Portal */}
           <button
             id="nav-open-customer-portal-btn"
@@ -365,6 +381,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <Globe className="w-4 h-4 text-emerald-500" />
                       <span>Lihat Portal Pelanggan</span>
                     </button>
+
+                    {onOpenGallery && (
+                      <button
+                        onClick={() => {
+                          setShowUserDropdown(false);
+                          onOpenGallery();
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-50 rounded-xl flex items-center gap-2 transition"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                        <span>Galeri Screenshot Fitur</span>
+                      </button>
+                    )}
                   </div>
 
                   {onLogout && (
