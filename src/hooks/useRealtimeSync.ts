@@ -15,6 +15,10 @@ export function useRealtimeSync(onEventReceived?: (event: RealtimeEvent) => void
   // Audio chime for payment verification using Web Audio API (no external sound file needed!)
   const playPaymentChime = useCallback(() => {
     try {
+      // Check if sound is muted by user setting
+      const isSoundMuted = localStorage.getItem('notification_sound_muted') === 'true';
+      if (isSoundMuted) return;
+
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();

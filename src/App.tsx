@@ -18,6 +18,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 // 3. Billing Automation Center (Otomasi Tagihan)
 // 4. Customer Portal (Portal Mandiri Pelanggan)
 import { CustomerDirectory } from './components/CustomerDirectory';
+import { RouterFleetManagement } from './components/RouterFleetManagement';
 import { ServiceCatalog } from './components/ServiceCatalog';
 import { BillingAutomationCenter } from './components/BillingAutomationCenter';
 import { CustomerPortal } from './components/CustomerPortal';
@@ -152,7 +153,11 @@ export default function App() {
         fetch('/api/automation/logs').then((r) => r.json()).catch(() => ({ logs: [] })),
       ]);
 
-      if (invData?.invoices) setInvoices(invData.invoices);
+      if (Array.isArray(invData)) {
+        setInvoices(invData);
+      } else if (invData?.invoices && Array.isArray(invData.invoices)) {
+        setInvoices(invData.invoices);
+      }
       if (anaData?.summary) setAnalytics(anaData);
       if (setData?.settings) {
         setSettings(setData.settings);
@@ -249,7 +254,14 @@ export default function App() {
 
   // Real-time synchronization hook via SSE
   const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
-    setActiveToast(event);
+    try {
+      const isMuted = localStorage.getItem('notification_toasts_muted') === 'true';
+      if (!isMuted) {
+        setActiveToast(event);
+      }
+    } catch {
+      setActiveToast(event);
+    }
     // Refresh analytics & invoice data seamlessly
     fetchData();
   }, [fetchData]);
@@ -258,7 +270,7 @@ export default function App() {
 
   // Find currently selected invoice
   const selectedInvoice = selectedInvoiceId 
-    ? invoices.find((i) => i.id === selectedInvoiceId) || null 
+    ? invoices.find((i) => i.id === selectedInvoiceId || i.invoiceNumber === selectedInvoiceId) || null 
     : null;
 
   // Invoice Handlers
@@ -851,7 +863,6 @@ export default function App() {
                 }}
                 onTriggerCheckReminders={handleTriggerCheckReminders}
                 isCheckingReminders={isCheckingReminders}
-                onOpenGallery={() => setIsGalleryModalOpen(true)}
               />
             )}
 
@@ -895,6 +906,26 @@ export default function App() {
                 onOpenPortalForCustomer={(query) => {
                   handleSwitchToCustomerPortal(query);
                 }}
+              />
+            )}
+
+            {/* 3.5. Router Fleet & Analytics View */}
+            {currentTab === 'routers' && (
+              <RouterFleetManagement
+                customers={customers}
+                onUpdateCustomer={async (id, data) => {
+                  try {
+                    await handleSaveCustomer({ ...data, id });
+                    return true;
+                  } catch {
+                    return false;
+                  }
+                }}
+                onCreateInvoiceForCustomer={handleCreateInvoiceForCustomer}
+                onNavigateToCustomer={(cust) => {
+                  setCurrentTab('customers');
+                }}
+                onRefreshAllData={fetchData}
               />
             )}
 
@@ -951,6 +982,10 @@ export default function App() {
       {/* 1. Invoice Detail & QRIS View */}
       <InvoiceDetailModal
         invoice={selectedInvoice}
+        settings={settings}
+        onInvoiceUpdated={(updatedInv) => {
+          setInvoices((prev) => prev.map((inv) => (inv.id === updatedInv.id ? updatedInv : inv)));
+        }}
         onClose={() => setSelectedInvoiceId(null)}
         onOpenPaymentModal={(inv) => setPaymentInvoice(inv)}
         onPrintInvoice={(inv) => setPrintInvoice(inv)}
@@ -990,6 +1025,7 @@ export default function App() {
         isOpen={isQrisModalOpen}
         onClose={() => setIsQrisModalOpen(false)}
         defaultStaticQris={settings?.defaultStaticQris || ''}
+        settings={settings}
       />
 
       {/* 5. Printable / PDF Invoice */}

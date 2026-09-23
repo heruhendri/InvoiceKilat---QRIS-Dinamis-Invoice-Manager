@@ -35,11 +35,22 @@ import {
   Bell,
   RotateCcw,
   AlertCircle,
-  AlertTriangle
+  AlertTriangle,
+  Send,
+  Clock,
+  Eye,
+  EyeOff,
+  FileText,
+  CheckCircle,
+  ArrowUpRight,
+  HardDrive,
+  FileUp,
+  MapPin
 } from 'lucide-react';
 import { Invoice, BusinessSettings } from '../types';
 import { QRISImageUploader } from './QRISImageUploader';
 import { formatDateTimeIndo } from '../utils/formatters';
+import { validateQris, parseQris } from '../utils/qrisClient';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -134,12 +145,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [defaultStaticQris, setDefaultStaticQris] = useState(settings?.defaultStaticQris || '');
   const [qrisMerchantName, setQrisMerchantName] = useState(settings?.qrisMerchantName || '');
   const [qrisMerchantCity, setQrisMerchantCity] = useState(settings?.qrisMerchantCity || '');
+  const [qrisAutoExtracted, setQrisAutoExtracted] = useState<boolean>(false);
+  const [qrisExtractionNotice, setQrisExtractionNotice] = useState<string>('');
+
+  const handleAutoExtractFromQris = (sourcePayload?: string) => {
+    const payload = (sourcePayload || defaultStaticQris || '').trim();
+    if (!payload) return;
+    const parsed = parseQris(payload);
+    if (parsed.merchantName) {
+      setQrisMerchantName(parsed.merchantName);
+    }
+    if (parsed.merchantCity) {
+      setQrisMerchantCity(parsed.merchantCity);
+    }
+    setQrisAutoExtracted(true);
+    setQrisExtractionNotice(
+      `Otomatis disinkronkan dari QRIS: ${parsed.merchantName || 'Merchant'} • ${parsed.merchantCity || 'Kota'}`
+    );
+    setTimeout(() => setQrisExtractionNotice(''), 6000);
+  };
 
   // Google Sheets
   const [googleSheetId, setGoogleSheetId] = useState(settings?.googleSheetId || '');
   const [googleSheetName, setGoogleSheetName] = useState(settings?.googleSheetName || 'Master_Invoice_DB');
   const [googleSheetWebhookUrl, setGoogleSheetWebhookUrl] = useState(settings?.googleSheetWebhookUrl || '');
   const [autoBackupToSheets, setAutoBackupToSheets] = useState(settings?.autoBackupToSheets ?? true);
+
+  // Telegram Backup Harian & Restore States
+  const [backupSection, setBackupSection] = useState<'telegram' | 'restore' | 'offline' | 'sheets'>('telegram');
+  const [telegramBotToken, setTelegramBotToken] = useState(settings?.telegramBotToken || '');
+  const [telegramChatId, setTelegramChatId] = useState(settings?.telegramChatId || '');
+  const [telegramDailyBackupEnabled, setTelegramDailyBackupEnabled] = useState(settings?.telegramDailyBackupEnabled ?? false);
+  const [telegramDailyBackupTime, setTelegramDailyBackupTime] = useState(settings?.telegramDailyBackupTime || '00:00');
+  const [telegramIncludeFormat, setTelegramIncludeFormat] = useState<'both' | 'document_json' | 'summary_text'>(settings?.telegramIncludeFormat || 'both');
+  const [lastTelegramBackupAt, setLastTelegramBackupAt] = useState(settings?.lastTelegramBackupAt || '');
+  const [lastTelegramBackupStatus, setLastTelegramBackupStatus] = useState(settings?.lastTelegramBackupStatus || 'idle');
+  const [lastTelegramBackupMessage, setLastTelegramBackupMessage] = useState(settings?.lastTelegramBackupMessage || '');
+  const [showBotToken, setShowBotToken] = useState(false);
+  const [showTelegramGuide, setShowTelegramGuide] = useState(false);
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+  const [telegramTestFeedback, setTelegramTestFeedback] = useState<{ success: boolean; message: string } | null>(null);
+  const [isSendingTelegramNow, setIsSendingTelegramNow] = useState(false);
+  const [telegramSendFeedback, setTelegramSendFeedback] = useState<{ success: boolean; message: string; stats?: any } | null>(null);
+
+  // Restore Database States
+  const [restorePayload, setRestorePayload] = useState<any | null>(null);
+  const [restorePreview, setRestorePreview] = useState<{
+    appName: string;
+    businessName: string;
+    exportedAt: string;
+    version: string;
+    invoicesCount: number;
+    paidInvoicesCount: number;
+    customersCount: number;
+    servicesCount: number;
+    recurringAddonsCount: number;
+    totalAmount: number;
+    hasSettings: boolean;
+  } | null>(null);
+  const [restoreMode, setRestoreMode] = useState<'replace' | 'merge'>('replace');
+  const [restoreIncludeSettings, setRestoreIncludeSettings] = useState(false);
+  const [isValidatingRestore, setIsValidatingRestore] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreFeedback, setRestoreFeedback] = useState<{ success: boolean; message: string; stats?: any } | null>(null);
+  const [showConfirmRestoreModal, setShowConfirmRestoreModal] = useState(false);
+  const restoreFileInputRef = useRef<HTMLInputElement>(null);
 
   // Notification & WhatsApp settings
   const [whatsappNotificationEnabled, setWhatsappNotificationEnabled] = useState(settings?.whatsappNotificationEnabled ?? true);
@@ -226,6 +296,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         settings.preDueEmailTemplate || 
         'Pengingat Pembayaran: Tagihan invoice {{invoice_number}} senilai Rp {{amount}} akan jatuh tempo dalam waktu dekat pada tanggal {{due_date}}.'
       );
+
+      // Telegram settings
+      setTelegramBotToken(settings.telegramBotToken || '');
+      setTelegramChatId(settings.telegramChatId || '');
+      setTelegramDailyBackupEnabled(settings.telegramDailyBackupEnabled ?? false);
+      setTelegramDailyBackupTime(settings.telegramDailyBackupTime || '00:00');
+      setTelegramIncludeFormat(settings.telegramIncludeFormat || 'both');
+      setLastTelegramBackupAt(settings.lastTelegramBackupAt || '');
+      setLastTelegramBackupStatus(settings.lastTelegramBackupStatus || 'idle');
+      setLastTelegramBackupMessage(settings.lastTelegramBackupMessage || '');
     }
   }, [settings, isOpen]);
 
@@ -313,6 +393,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setAutoSendOverdueEmail(updated.autoSendOverdueEmail ?? true);
       setOverdueEmailTemplate(updated.overdueEmailTemplate || '');
       setPreDueEmailTemplate(updated.preDueEmailTemplate || '');
+
+      setTelegramBotToken(updated.telegramBotToken || '');
+      setTelegramChatId(updated.telegramChatId || '');
+      setTelegramDailyBackupEnabled(updated.telegramDailyBackupEnabled ?? false);
+      setTelegramDailyBackupTime(updated.telegramDailyBackupTime || '00:00');
+      setTelegramIncludeFormat(updated.telegramIncludeFormat || 'both');
+      setLastTelegramBackupAt(updated.lastTelegramBackupAt || '');
+      setLastTelegramBackupStatus(updated.lastTelegramBackupStatus || 'idle');
+      setLastTelegramBackupMessage(updated.lastTelegramBackupMessage || '');
 
       setConfirmReset(false);
       setSavedSuccess(true);
@@ -408,6 +497,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         autoSendOverdueEmail,
         overdueEmailTemplate,
         preDueEmailTemplate,
+
+        // Telegram Backup settings
+        telegramBotToken: telegramBotToken.trim(),
+        telegramChatId: telegramChatId.trim(),
+        telegramDailyBackupEnabled,
+        telegramDailyBackupTime: telegramDailyBackupTime.trim() || '00:00',
+        telegramIncludeFormat,
+        lastTelegramBackupAt,
+        lastTelegramBackupStatus,
+        lastTelegramBackupMessage,
       });
       setSavedSuccess(true);
       setTimeout(() => {
@@ -419,6 +518,190 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setErrorMessage(e?.message || 'Gagal menyimpan pengaturan ke database server.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Test Telegram Bot Connection
+  const handleTestTelegram = async () => {
+    if (!telegramBotToken.trim()) {
+      setTelegramTestFeedback({ success: false, message: 'Harap isi Bot Token Telegram terlebih dahulu.' });
+      return;
+    }
+    if (!telegramChatId.trim()) {
+      setTelegramTestFeedback({ success: false, message: 'Harap isi Chat ID Telegram terlebih dahulu.' });
+      return;
+    }
+
+    setIsTestingTelegram(true);
+    setTelegramTestFeedback(null);
+    try {
+      const res = await fetch('/api/backup/telegram/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botToken: telegramBotToken.trim(),
+          chatId: telegramChatId.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramTestFeedback({ success: true, message: data.message });
+      } else {
+        setTelegramTestFeedback({ success: false, message: data.message || 'Gagal terhubung ke Telegram.' });
+      }
+    } catch (err: any) {
+      setTelegramTestFeedback({ success: false, message: err.message || 'Gagal menghubungi server API.' });
+    } finally {
+      setIsTestingTelegram(false);
+    }
+  };
+
+  // Dispatch Manual Telegram Backup Now
+  const handleSendTelegramNow = async () => {
+    if (!telegramBotToken.trim() || !telegramChatId.trim()) {
+      setTelegramSendFeedback({
+        success: false,
+        message: 'Bot Token dan Chat ID wajib diisi sebelum mengirim cadangan.',
+      });
+      return;
+    }
+
+    setIsSendingTelegramNow(true);
+    setTelegramSendFeedback(null);
+    try {
+      const res = await fetch('/api/backup/telegram/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          botToken: telegramBotToken.trim(),
+          chatId: telegramChatId.trim(),
+          format: telegramIncludeFormat,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLastTelegramBackupAt(data.sentAt || new Date().toISOString());
+        setLastTelegramBackupStatus('success');
+        setLastTelegramBackupMessage(data.message);
+        setTelegramSendFeedback({
+          success: true,
+          message: data.message,
+          stats: data.stats,
+        });
+      } else {
+        setLastTelegramBackupStatus('failed');
+        setLastTelegramBackupMessage(data.message);
+        setTelegramSendFeedback({
+          success: false,
+          message: data.message || 'Pengiriman backup ke Telegram gagal.',
+        });
+      }
+    } catch (err: any) {
+      setLastTelegramBackupStatus('failed');
+      setLastTelegramBackupMessage(err.message);
+      setTelegramSendFeedback({
+        success: false,
+        message: err.message || 'Koneksi ke server gagal saat backup.',
+      });
+    } finally {
+      setIsSendingTelegramNow(false);
+    }
+  };
+
+  // Handle Restore File Selection & Validation
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsValidatingRestore(true);
+    setRestoreFeedback(null);
+    setRestorePreview(null);
+    setRestorePayload(null);
+
+    try {
+      const text = await file.text();
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+      } catch (err) {
+        throw new Error('Berkas yang dipilih bukan format JSON yang valid.');
+      }
+
+      const res = await fetch('/api/backup/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupData: parsed }),
+      });
+      const data = await res.json();
+
+      if (data.success && data.isValid) {
+        setRestorePayload(parsed);
+        setRestorePreview(data.preview);
+      } else {
+        setRestoreFeedback({
+          success: false,
+          message: data.message || 'Validasi berkas cadangan gagal.',
+        });
+      }
+    } catch (err: any) {
+      setRestoreFeedback({
+        success: false,
+        message: err.message || 'Gagal membaca berkas cadangan.',
+      });
+    } finally {
+      setIsValidatingRestore(false);
+      if (restoreFileInputRef.current) {
+        restoreFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Execute Restore Action
+  const handleExecuteRestore = async () => {
+    if (!restorePayload) return;
+
+    setIsRestoring(true);
+    setRestoreFeedback(null);
+    try {
+      const res = await fetch('/api/backup/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backupData: restorePayload,
+          mode: restoreMode,
+          includeSettings: restoreIncludeSettings,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRestoreFeedback({
+          success: true,
+          message: data.message,
+          stats: data.stats,
+        });
+        setShowConfirmRestoreModal(false);
+        setRestorePreview(null);
+        setRestorePayload(null);
+
+        // Auto reload after brief delay to refresh all screens with restored data
+        setTimeout(() => {
+          window.location.reload();
+        }, 1800);
+      } else {
+        setRestoreFeedback({
+          success: false,
+          message: data.message || 'Gagal memulihkan database.',
+        });
+        setShowConfirmRestoreModal(false);
+      }
+    } catch (err: any) {
+      setRestoreFeedback({
+        success: false,
+        message: err.message || 'Terjadi kesalahan sistem saat pemulihan database.',
+      });
+      setShowConfirmRestoreModal(false);
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -511,8 +794,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
             }`}
           >
-            <TableProperties className="w-3.5 h-3.5 text-teal-600" />
-            <span>Google Sheets & Backup</span>
+            <Database className="w-3.5 h-3.5 text-teal-600" />
+            <span>Backup & Restore (Telegram / Cloud)</span>
+            {telegramDailyBackupEnabled && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" title="Backup Telegram Harian Aktif" />
+            )}
           </button>
 
           <button
@@ -1210,234 +1496,996 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div>
                   <h4 className="font-bold text-emerald-950 text-xs sm:text-sm">QRIS DANA Bisnis Merchant Terpusat</h4>
                   <p className="text-slate-600 text-[11px] mt-0.5 leading-relaxed">
-                    Sistem otomatis mengkonversi QRIS statis ini menjadi <strong>QRIS Dinamis</strong> ber-nominal terkunci untuk setiap invoice dan portal pelanggan.
+                    Sistem otomatis mengkonversi QRIS statis ini menjadi <strong>QRIS Dinamis</strong> ber-nominal terkunci untuk setiap invoice dan portal pelanggan. Upload gambar QRIS di bawah untuk mengisi nama & kota merchant secara otomatis.
                   </p>
                 </div>
               </div>
 
+              {qrisExtractionNotice && (
+                <div className="p-3 bg-emerald-100/90 border border-emerald-300 rounded-xl text-xs text-emerald-950 flex items-center justify-between animate-in fade-in slide-in-from-top-1">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+                    <span className="font-semibold">{qrisExtractionNotice}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setQrisExtractionNotice('')}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold text-xs px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">
-                    Nama Merchant QRIS (Sesuai DANA Bisnis)
+                  <label className="font-bold text-slate-700 flex items-center justify-between mb-1">
+                    <span className="flex items-center gap-1.5">
+                      <span>Nama Merchant QRIS (Sesuai DANA Bisnis)</span>
+                      {qrisAutoExtracted && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                          <Sparkles className="w-3 h-3 text-emerald-600" />
+                          Otomatis
+                        </span>
+                      )}
+                    </span>
+                    {defaultStaticQris && (
+                      <button
+                        type="button"
+                        onClick={() => handleAutoExtractFromQris()}
+                        className="text-[10px] font-medium text-emerald-600 hover:text-emerald-800 hover:underline flex items-center gap-1 cursor-pointer"
+                        title="Tarik nama & kota otomatis dari string QRIS"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        <span>Tarik dari QRIS</span>
+                      </button>
+                    )}
                   </label>
                   <input
                     type="text"
                     value={qrisMerchantName}
-                    onChange={(e) => setQrisMerchantName(e.target.value)}
+                    onChange={(e) => {
+                      setQrisMerchantName(e.target.value);
+                      setQrisAutoExtracted(false);
+                    }}
                     placeholder="DANA BISNIS CIPTA MEDIA"
-                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 uppercase font-mono"
+                    className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:ring-2 focus:ring-blue-500 uppercase font-mono transition-colors ${
+                      qrisAutoExtracted
+                        ? 'border-emerald-300 bg-emerald-50/50 text-emerald-950 font-bold'
+                        : 'border-slate-200 text-slate-800'
+                    }`}
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {qrisAutoExtracted ? '✓ Terisi otomatis dari Tag 59 QRIS' : 'Otomatis terisi saat screenshot QRIS di-upload'}
+                  </p>
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">
-                    Kota Merchant (Contoh: JAKARTA, BANDUNG, SURABAYA)
+                  <label className="font-bold text-slate-700 flex items-center justify-between mb-1">
+                    <span className="flex items-center gap-1.5">
+                      <span>Kota Merchant (Contoh: JAKARTA, BANDUNG, SURABAYA)</span>
+                      {qrisAutoExtracted && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                          <MapPin className="w-3 h-3 text-emerald-600" />
+                          Otomatis
+                        </span>
+                      )}
+                    </span>
                   </label>
                   <input
                     type="text"
                     value={qrisMerchantCity}
-                    onChange={(e) => setQrisMerchantCity(e.target.value)}
+                    onChange={(e) => {
+                      setQrisMerchantCity(e.target.value);
+                      setQrisAutoExtracted(false);
+                    }}
                     placeholder="JAKARTA"
-                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 uppercase font-mono"
+                    className={`w-full px-3.5 py-2 text-xs rounded-xl border focus:ring-2 focus:ring-blue-500 uppercase font-mono transition-colors ${
+                      qrisAutoExtracted
+                        ? 'border-emerald-300 bg-emerald-50/50 text-emerald-950 font-bold'
+                        : 'border-slate-200 text-slate-800'
+                    }`}
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {qrisAutoExtracted ? '✓ Terisi otomatis dari Tag 60 QRIS' : 'Otomatis terisi saat screenshot QRIS di-upload'}
+                  </p>
                 </div>
               </div>
 
               <QRISImageUploader
-                label="Upload Screenshot QRIS DANA Bisnis Anda"
+                label="Upload Screenshot QRIS DANA Bisnis Anda (Otomatis Ekstrak)"
                 currentPayload={defaultStaticQris}
+                autoSaveToSettings={true}
                 onQRISDecoded={(payload, meta) => {
                   setDefaultStaticQris(payload);
-                  if (meta?.merchantName && !qrisMerchantName) {
-                    setQrisMerchantName(meta.merchantName);
+                  const parsed = parseQris(payload);
+                  const detectedName = meta?.merchantName || parsed.merchantName;
+                  const detectedCity = meta?.merchantCity || parsed.merchantCity;
+
+                  if (detectedName) {
+                    setQrisMerchantName(detectedName);
                   }
-                  if (meta?.merchantCity && !qrisMerchantCity) {
-                    setQrisMerchantCity(meta.merchantCity);
+                  if (detectedCity) {
+                    setQrisMerchantCity(detectedCity);
                   }
+                  setQrisAutoExtracted(true);
+                  setQrisExtractionNotice(
+                    `Berhasil otomatis mengisi: Nama Merchant "${detectedName || 'Merchant'}" & Kota "${detectedCity || 'Kota'}" dari QRIS yang di-upload!`
+                  );
+                  setTimeout(() => setQrisExtractionNotice(''), 7000);
                 }}
               />
 
               <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                  String Payload EMVCo QRIS Statis:
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-600 block">
+                    String Payload EMVCo QRIS Statis:
+                  </label>
+                  {defaultStaticQris && (
+                    <button
+                      type="button"
+                      onClick={() => handleAutoExtractFromQris()}
+                      className="text-[10px] font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Ekstrak Ulang Nama & Kota</span>
+                    </button>
+                  )}
+                </div>
                 <textarea
                   rows={2}
                   value={defaultStaticQris}
-                  onChange={(e) => setDefaultStaticQris(e.target.value)}
-                  placeholder="00020101021126590014ID.DANA.WWW..."
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDefaultStaticQris(val);
+                    if (val.trim().startsWith('000201')) {
+                      const parsed = parseQris(val.trim());
+                      if (parsed.merchantName) setQrisMerchantName(parsed.merchantName);
+                      if (parsed.merchantCity) setQrisMerchantCity(parsed.merchantCity);
+                      setQrisAutoExtracted(true);
+                    }
+                  }}
+                  placeholder="0002010102112658..."
                   className="w-full px-3 py-2 text-[11px] font-mono rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-blue-500"
                 />
+                {defaultStaticQris && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[11px]">
+                    {validateQris(defaultStaticQris).valid ? (
+                      <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        {validateQris(defaultStaticQris).message}
+                      </span>
+                    ) : (
+                      <span className="text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                        {validateQris(defaultStaticQris).message}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* TAB 5: GOOGLE SHEETS & BACKUP */}
+          {/* TAB 5: BACKUP & RESTORE (TELEGRAM, OFFLINE, SPREADSHEET) */}
           {activeTab === 'backup' && (
             <div className="space-y-4 animate-in fade-in duration-200">
               {/* Header Status Banner */}
-              <div className="rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 p-4 sm:p-5 text-white shadow-md">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 p-4 sm:p-5 text-white shadow-md border border-blue-900/40">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 border border-teal-400/20">
-                        <Radio className="w-3 h-3 text-teal-400 animate-pulse" />
-                        Pusat Sinkronisasi Spreadsheet
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 border border-blue-400/20">
+                        <Database className="w-3 h-3 text-blue-400" />
+                        Pusat Cadangan & Pemulihan Sistem
                       </span>
-                      <span className="text-[10px] text-teal-200">
-                        {googleSheetId || settings?.googleSheetId ? 'Terhubung' : 'Siap Dikonfigurasi'}
-                      </span>
+                      {telegramDailyBackupEnabled ? (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold flex items-center gap-1 border border-emerald-400/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          Telegram Harian Aktif ({telegramDailyBackupTime} WIB)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-medium border border-amber-400/20">
+                          Telegram Otomatis Belum Aktif
+                        </span>
+                      )}
                     </div>
                     <h4 className="font-extrabold text-white text-sm sm:text-base">
-                      Sinkronisasi & Backup Lengkap ke Google Spreadsheet
+                      Cadangan Otomatis ke Telegram & Pemulihan (Restore) Database
                     </h4>
-                    <p className="text-teal-100/80 text-[11px] mt-0.5 max-w-xl leading-relaxed">
-                      Otomatis simpan nama aplikasi (<strong>{appName}</strong>), profil perusahaan (<strong>{businessName || 'Perusahaan'}</strong>), katalog jasa, pelanggan, invoice, dan transaksi.
+                    <p className="text-slate-300 text-[11px] mt-0.5 max-w-xl leading-relaxed">
+                      Amankan database transaksi, master invoice, profil pelanggan, dan layanan secara otomatis ke bot/channel Telegram Anda setiap hari, atau pulihkan data kapan saja.
                     </p>
                   </div>
 
-                  {/* Sync Trigger Button */}
+                  {/* Quick Action Buttons */}
                   <div className="shrink-0 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={async () => {
-                        setIsLocalSyncing(true);
-                        setSyncSuccessMsg(null);
-                        try {
-                          if (onTriggerSync) {
-                            await onTriggerSync();
-                          } else {
-                            await fetch('/api/spreadsheet/sync-webhook', { method: 'POST' });
-                          }
-                          setSyncSuccessMsg('Data perusahaan berhasil disinkronkan ke Google Spreadsheet!');
-                          setTimeout(() => setSyncSuccessMsg(null), 4000);
-                        } catch (e: any) {
-                          console.error(e);
-                        } finally {
-                          setIsLocalSyncing(false);
-                        }
-                      }}
-                      disabled={isSyncing || isLocalSyncing}
-                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-teal-500/20 transition active:scale-95 disabled:opacity-50"
+                      onClick={() => setBackupSection('restore')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/10 transition active:scale-95"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing || isLocalSyncing ? 'animate-spin' : ''}`} />
-                      <span>{isSyncing || isLocalSyncing ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
+                      <FileUp className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Pulihkan Data</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendTelegramNow}
+                      disabled={isSendingTelegramNow || !telegramBotToken || !telegramChatId}
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition active:scale-95 disabled:opacity-50"
+                      title="Kirim backup database terbaru ke Telegram sekarang"
+                    >
+                      <Send className={`w-3.5 h-3.5 ${isSendingTelegramNow ? 'animate-spin' : ''}`} />
+                      <span>{isSendingTelegramNow ? 'Mengirim...' : 'Kirim ke Telegram'}</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Status metrics */}
-                <div className="mt-4 pt-3 border-t border-teal-700/50 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                  <div className="bg-teal-950/40 rounded-xl p-2 border border-teal-700/30">
-                    <span className="text-[10px] text-teal-300 block">Terakhir Disinkronkan:</span>
+                {/* Status metrics bar */}
+                <div className="mt-4 pt-3 border-t border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+                    <span className="text-[10px] text-slate-400 block">Jadwal Backup:</span>
                     <span className="font-semibold text-white text-[11px] truncate block">
-                      {settings?.lastSpreadsheetSync ? formatDateTimeIndo(settings.lastSpreadsheetSync) : 'Belum sinkron'}
+                      {telegramDailyBackupEnabled ? `Harian @ ${telegramDailyBackupTime} WIB` : 'Manual / Nonaktif'}
                     </span>
                   </div>
-                  <div className="bg-teal-950/40 rounded-xl p-2 border border-teal-700/30">
-                    <span className="text-[10px] text-teal-300 block">Status Data Invoice:</span>
-                    <span className="font-semibold text-white text-[11px] truncate block">
-                      {invoices.length > 0
-                        ? `${invoices.filter(i => i.spreadsheetSynced).length} / ${invoices.length} Tersinkron`
-                        : 'Database Siap'}
+                  <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+                    <span className="text-[10px] text-slate-400 block">Status Terakhir:</span>
+                    <span className={`font-semibold text-[11px] truncate block ${
+                      lastTelegramBackupStatus === 'success' ? 'text-emerald-400' : lastTelegramBackupStatus === 'failed' ? 'text-rose-400' : 'text-slate-300'
+                    }`}>
+                      {lastTelegramBackupStatus === 'success' ? 'Berhasil Terkirim' : lastTelegramBackupStatus === 'failed' ? 'Gagal Terkirim' : 'Belum Ada'}
                     </span>
                   </div>
-                  <div className="bg-teal-950/40 rounded-xl p-2 border border-teal-700/30 col-span-2 sm:col-span-1">
-                    <span className="text-[10px] text-teal-300 block">Integrasi Webhook:</span>
+                  <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+                    <span className="text-[10px] text-slate-400 block">Waktu Terakhir:</span>
                     <span className="font-semibold text-white text-[11px] truncate block">
-                      {googleSheetWebhookUrl ? 'Webhook Aktif' : 'Belum Diatur'}
+                      {lastTelegramBackupAt ? formatDateTimeIndo(lastTelegramBackupAt) : 'Belum Pernah'}
+                    </span>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-2 border border-white/10">
+                    <span className="text-[10px] text-slate-400 block">Data Sistem:</span>
+                    <span className="font-semibold text-white text-[11px] truncate block">
+                      {invoices.length} Invoice • {settings?.businessName || 'Profil Bisnis'}
                     </span>
                   </div>
                 </div>
-
-                {syncSuccessMsg && (
-                  <div className="mt-3 p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>{syncSuccessMsg}</span>
-                  </div>
-                )}
               </div>
 
-              {/* 1. Satu-Klik Unduh / Export Semua Data */}
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center gap-2">
-                    <Download className="w-4 h-4 text-teal-700" />
-                    <h5 className="font-bold text-slate-900 text-xs sm:text-sm">
+              {/* Sub-tab Switcher Pills */}
+              <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 overflow-x-auto text-xs">
+                <button
+                  type="button"
+                  onClick={() => setBackupSection('telegram')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold transition shrink-0 ${
+                    backupSection === 'telegram'
+                      ? 'bg-white text-blue-700 shadow-xs border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                  }`}
+                >
+                  <Send className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Backup Telegram Harian</span>
+                  {telegramDailyBackupEnabled && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBackupSection('restore')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold transition shrink-0 ${
+                    backupSection === 'restore'
+                      ? 'bg-white text-emerald-700 shadow-xs border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                  }`}
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Pulihkan (Restore) Database</span>
+                  {restorePreview && (
+                    <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold">Siap</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBackupSection('offline')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold transition shrink-0 ${
+                    backupSection === 'offline'
+                      ? 'bg-white text-indigo-700 shadow-xs border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                  }`}
+                >
+                  <Download className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Unduh Cadangan Offline</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setBackupSection('sheets')}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold transition shrink-0 ${
+                    backupSection === 'sheets'
+                      ? 'bg-white text-teal-700 shadow-xs border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Google Spreadsheet Sync</span>
+                </button>
+              </div>
+
+              {/* ================= SECTION 1: TELEGRAM BACKUP HARIAN ================= */}
+              {backupSection === 'telegram' && (
+                <div className="space-y-4">
+                  {/* Notification Feedback Banners */}
+                  {telegramTestFeedback && (
+                    <div className={`p-3 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in ${
+                      telegramTestFeedback.success
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {telegramTestFeedback.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        )}
+                        <span>{telegramTestFeedback.message}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTelegramTestFeedback(null)}
+                        className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  {telegramSendFeedback && (
+                    <div className={`p-3 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in ${
+                      telegramSendFeedback.success
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {telegramSendFeedback.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        )}
+                        <div>
+                          <p>{telegramSendFeedback.message}</p>
+                          {telegramSendFeedback.stats && (
+                            <p className="text-[11px] opacity-80 mt-0.5">
+                              Terkirim: {telegramSendFeedback.stats.invoices} tagihan, {telegramSendFeedback.stats.customers} pelanggan, total nominal Rp {Number(telegramSendFeedback.stats.totalRevenue || 0).toLocaleString('id-ID')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTelegramSendFeedback(null)}
+                        className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Main Telegram Configuration Card */}
+                  <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white space-y-4">
+                    <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                      <div>
+                        <h5 className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                          <Send className="w-4 h-4 text-blue-600" />
+                          Pengaturan Bot & Saluran Telegram
+                        </h5>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          File backup database (.json) dan ringkasan finansial akan otomatis dikirimkan ke Telegram Anda.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowTelegramGuide(!showTelegramGuide)}
+                        className="text-[11px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 underline"
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                        <span>{showTelegramGuide ? 'Tutup Panduan' : 'Cara Buat Bot'}</span>
+                      </button>
+                    </div>
+
+                    {/* Collapsible Step-by-step Guide */}
+                    {showTelegramGuide && (
+                      <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-100 text-xs text-slate-700 space-y-2 animate-in fade-in">
+                        <p className="font-bold text-blue-900">Panduan 3 Langkah Menghubungkan Telegram:</p>
+                        <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-700 pl-1 leading-relaxed">
+                          <li>
+                            Buka <strong>@BotFather</strong> di Telegram, kirim perintah <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-blue-800">/newbot</code>, ikuti petunjuk dan salin <strong>HTTP API Bot Token</strong> ke kolom di bawah.
+                          </li>
+                          <li>
+                            Buka bot yang baru dibuat di Telegram dan klik <strong>START</strong> (atau kirim pesan apa saja agar bot bisa mengirim pesan ke Anda).
+                          </li>
+                          <li>
+                            Dapatkan Chat ID Anda via bot <strong>@userinfobot</strong> atau <strong>@getidsbot</strong> di Telegram. Jika ingin dikirim ke <strong>Grup/Channel</strong>, tambahkan bot ke grup tersebut lalu masukkan ID Grup (biasanya diawali tanda minus <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-blue-800">-100xxxx</code>).
+                          </li>
+                        </ol>
+                      </div>
+                    )}
+
+                    {/* Bot Token & Chat ID Inputs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="font-bold text-slate-700 text-xs flex items-center gap-1">
+                            Telegram Bot Token
+                            <span className="text-rose-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowBotToken(!showBotToken)}
+                            className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1"
+                          >
+                            {showBotToken ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            <span>{showBotToken ? 'Sembunyikan' : 'Lihat'}</span>
+                          </button>
+                        </div>
+                        <input
+                          type={showBotToken ? 'text' : 'password'}
+                          value={telegramBotToken}
+                          onChange={(e) => setTelegramBotToken(e.target.value)}
+                          placeholder="Contoh: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                          className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 font-mono"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-1 block">
+                          Token rahasia dari @BotFather
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="font-bold text-slate-700 text-xs block mb-1">
+                          Telegram Chat ID / Group ID
+                          <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={telegramChatId}
+                          onChange={(e) => setTelegramChatId(e.target.value)}
+                          placeholder="Contoh: 987654321 atau -100123456789"
+                          className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 font-mono"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-1 block">
+                          ID Telegram pribadi Anda atau ID grup/saluran
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Automated Daily Toggle & Time Picker */}
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="font-extrabold text-slate-900 text-xs block">
+                            Kirim Cadangan Otomatis Harian
+                          </label>
+                          <span className="text-[11px] text-slate-500">
+                            Server akan otomatis mengekspor seluruh database dan mengirimkannya ke Telegram setiap hari
+                          </span>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={telegramDailyBackupEnabled}
+                            onChange={(e) => setTelegramDailyBackupEnabled(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                      </div>
+
+                      {telegramDailyBackupEnabled && (
+                        <div className="pt-3 border-t border-slate-200 space-y-2 animate-in fade-in">
+                          <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-blue-600" />
+                            Pilih Waktu Pengiriman Cadangan Harian:
+                          </label>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {[
+                              { label: '00:00 (Tengah Malam)', value: '00:00' },
+                              { label: '06:00 (Pagi Hari)', value: '06:00' },
+                              { label: '12:00 (Siang Hari)', value: '12:00' },
+                              { label: '18:00 (Sore Hari)', value: '18:00' },
+                              { label: '23:00 (Malam Hari)', value: '23:00' },
+                            ].map((preset) => (
+                              <button
+                                key={preset.value}
+                                type="button"
+                                onClick={() => setTelegramDailyBackupTime(preset.value)}
+                                className={`px-2.5 py-1 text-xs rounded-lg font-semibold transition border ${
+                                  telegramDailyBackupTime === preset.value
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300'
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                            <div className="flex items-center gap-1 ml-auto">
+                              <span className="text-[11px] text-slate-500 font-medium">Kustom (HH:mm):</span>
+                              <input
+                                type="time"
+                                value={telegramDailyBackupTime}
+                                onChange={(e) => setTelegramDailyBackupTime(e.target.value)}
+                                className="px-2 py-1 text-xs rounded-lg border border-slate-200 font-mono font-bold text-slate-800"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Format Selector */}
+                    <div>
+                      <label className="font-bold text-slate-700 text-xs block mb-1.5">
+                        Format Pengiriman ke Telegram:
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {[
+                          {
+                            id: 'both',
+                            title: 'Dokumen JSON + Ringkasan Pesan',
+                            desc: 'Kirim file database utuh dan laporan statistik finansial lengkap (Disarankan).',
+                          },
+                          {
+                            id: 'document_json',
+                            title: 'Hanya Dokumen JSON',
+                            desc: 'Hanya melampirkan berkas file .json cadangan untuk restore.',
+                          },
+                          {
+                            id: 'summary_text',
+                            title: 'Hanya Ringkasan Teks',
+                            desc: 'Kirim laporan ringkasan transaksi & tagihan tanpa lampiran file.',
+                          },
+                        ].map((fmt) => (
+                          <label
+                            key={fmt.id}
+                            className={`p-2.5 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
+                              telegramIncludeFormat === fmt.id
+                                ? 'bg-blue-50/70 border-blue-400 text-blue-950'
+                                : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <input
+                                type="radio"
+                                name="telegramFormat"
+                                value={fmt.id}
+                                checked={telegramIncludeFormat === fmt.id}
+                                onChange={() => setTelegramIncludeFormat(fmt.id as any)}
+                                className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                              />
+                              <div>
+                                <span className="font-bold text-xs block">{fmt.title}</span>
+                                <span className="text-[10px] text-slate-500 leading-tight block mt-0.5">
+                                  {fmt.desc}
+                                </span>
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons: Test Connection & Send Now */}
+                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+                      <button
+                        type="button"
+                        onClick={handleTestTelegram}
+                        disabled={isTestingTelegram || !telegramBotToken || !telegramChatId}
+                        className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isTestingTelegram ? 'animate-spin' : ''}`} />
+                        <span>{isTestingTelegram ? 'Menguji Bot...' : 'Tes Koneksi Bot Telegram'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSendTelegramNow}
+                        disabled={isSendingTelegramNow || !telegramBotToken || !telegramChatId}
+                        className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition active:scale-95 disabled:opacity-50"
+                      >
+                        <Send className={`w-3.5 h-3.5 ${isSendingTelegramNow ? 'animate-spin' : ''}`} />
+                        <span>{isSendingTelegramNow ? 'Mengirim Cadangan...' : 'Kirim Cadangan ke Telegram Sekarang'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ================= SECTION 2: RESTORE DATABASE ================= */}
+              {backupSection === 'restore' && (
+                <div className="space-y-4">
+                  {restoreFeedback && (
+                    <div className={`p-3 rounded-2xl border text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in ${
+                      restoreFeedback.success
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        {restoreFeedback.success ? (
+                          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        )}
+                        <div>
+                          <p>{restoreFeedback.message}</p>
+                          {restoreFeedback.stats && (
+                            <p className="text-[11px] opacity-80 mt-0.5">
+                              Hasil: {restoreFeedback.stats.totalInvoices} invoice & {restoreFeedback.stats.totalCustomers} pelanggan aktif sekarang. Halaman akan menyegarkan data otomatis...
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRestoreFeedback(null)}
+                        className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Upload Dropzone Card */}
+                  <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white space-y-4">
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                      <div>
+                        <h5 className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                          <RotateCcw className="w-4 h-4 text-emerald-600" />
+                          Pemulihan (Restore) Database dari File Cadangan
+                        </h5>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Unggah file cadangan JSON yang sebelumnya diunduh dari sistem atau diterima via Telegram untuk memulihkan seluruh data.
+                        </p>
+                      </div>
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={restoreFileInputRef}
+                      onChange={handleFileSelect}
+                      accept=".json,application/json"
+                      className="hidden"
+                    />
+
+                    {!restorePreview ? (
+                      <div
+                        onClick={() => restoreFileInputRef.current?.click()}
+                        className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/60 hover:bg-emerald-50/30 transition group"
+                      >
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                          <FileUp className="w-6 h-6" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-800">
+                          {isValidatingRestore ? 'Membaca & Memvalidasi File...' : 'Klik atau Tarik File Cadangan (.json) ke Sini'}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Mendukung file cadangan database InvoiceKilat resmi (format .json)
+                        </p>
+                      </div>
+                    ) : (
+                      /* Preview Box */
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span className="font-extrabold text-emerald-950 text-xs">
+                              File Cadangan Sah & Terverifikasi
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRestorePreview(null);
+                              setRestorePayload(null);
+                            }}
+                            className="text-[11px] text-rose-600 hover:text-rose-800 font-bold underline"
+                          >
+                            Ganti Berkas
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                          <div className="bg-white rounded-xl p-2.5 border border-emerald-100 shadow-2xs">
+                            <span className="text-[10px] text-slate-400 block">Aplikasi / Brand:</span>
+                            <span className="font-bold text-slate-900 truncate block">
+                              {restorePreview.appName}
+                            </span>
+                            <span className="text-[10px] text-slate-500 block truncate">
+                              {restorePreview.businessName}
+                            </span>
+                          </div>
+                          <div className="bg-white rounded-xl p-2.5 border border-emerald-100 shadow-2xs">
+                            <span className="text-[10px] text-slate-400 block">Jumlah Tagihan:</span>
+                            <span className="font-extrabold text-blue-700 text-sm block">
+                              {restorePreview.invoicesCount} Tagihan
+                            </span>
+                            <span className="text-[10px] text-emerald-600 block">
+                              {restorePreview.paidInvoicesCount} Lunas
+                            </span>
+                          </div>
+                          <div className="bg-white rounded-xl p-2.5 border border-emerald-100 shadow-2xs">
+                            <span className="text-[10px] text-slate-400 block">Pelanggan & Jasa:</span>
+                            <span className="font-bold text-slate-900 block">
+                              {restorePreview.customersCount} Pelanggan
+                            </span>
+                            <span className="text-[10px] text-slate-500 block">
+                              {restorePreview.servicesCount} Layanan Jasa
+                            </span>
+                          </div>
+                          <div className="bg-white rounded-xl p-2.5 border border-emerald-100 shadow-2xs">
+                            <span className="text-[10px] text-slate-400 block">Total Nominal:</span>
+                            <span className="font-extrabold text-emerald-700 text-sm block truncate">
+                              Rp {Number(restorePreview.totalAmount || 0).toLocaleString('id-ID')}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block truncate">
+                              Ekspor: {restorePreview.exportedAt ? new Date(restorePreview.exportedAt).toLocaleDateString('id-ID') : '-'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Mode Selection */}
+                        <div className="pt-2 border-t border-emerald-200/60 space-y-2">
+                          <label className="font-bold text-slate-800 text-xs block">
+                            Pilih Metode Pemulihan Data:
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <label
+                              className={`p-3 rounded-xl border cursor-pointer transition flex items-start gap-2.5 ${
+                                restoreMode === 'replace'
+                                  ? 'bg-white border-emerald-500 ring-2 ring-emerald-500/20 text-slate-900'
+                                  : 'bg-white/60 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="restoreMode"
+                                value="replace"
+                                checked={restoreMode === 'replace'}
+                                onChange={() => setRestoreMode('replace')}
+                                className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                              />
+                              <div>
+                                <span className="font-extrabold text-xs block text-slate-900">
+                                  Ganti Total (Replace All)
+                                </span>
+                                <span className="text-[10px] text-slate-500 block mt-0.5 leading-snug">
+                                  Menggantikan data invoice, pelanggan, dan jasa saat ini secara penuh dengan data file cadangan ini. Snapshot keamanan dibuat otomatis sebelum ditimpa.
+                                </span>
+                              </div>
+                            </label>
+
+                            <label
+                              className={`p-3 rounded-xl border cursor-pointer transition flex items-start gap-2.5 ${
+                                restoreMode === 'merge'
+                                  ? 'bg-white border-blue-500 ring-2 ring-blue-500/20 text-slate-900'
+                                  : 'bg-white/60 border-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="restoreMode"
+                                value="merge"
+                                checked={restoreMode === 'merge'}
+                                onChange={() => setRestoreMode('merge')}
+                                className="mt-0.5 text-blue-600 focus:ring-blue-500"
+                              />
+                              <div>
+                                <span className="font-extrabold text-xs block text-slate-900">
+                                  Gabungkan Data (Merge)
+                                </span>
+                                <span className="text-[10px] text-slate-500 block mt-0.5 leading-snug">
+                                  Menambahkan invoice dan pelanggan baru tanpa menghapus catatan yang sudah ada di sistem saat ini.
+                                </span>
+                              </div>
+                            </label>
+                          </div>
+
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id="restoreSettingsCheck"
+                              checked={restoreIncludeSettings}
+                              onChange={(e) => setRestoreIncludeSettings(e.target.checked)}
+                              className="rounded text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <label htmlFor="restoreSettingsCheck" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                              Perbarui juga Profil Perusahaan & Pengaturan dari Berkas Cadangan Ini
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Execute Button */}
+                        <div className="pt-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmRestoreModal(true)}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition active:scale-95"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Mulai Pulihkan Database</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ================= SECTION 3: OFFLINE BACKUP DOWNLOAD ================= */}
+              {backupSection === 'offline' && (
+                <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-white space-y-4">
+                  <div className="border-b border-slate-100 pb-3">
+                    <h5 className="font-extrabold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                      <Download className="w-4 h-4 text-indigo-600" />
                       Unduh Cadangan Database Perusahaan (Offline Backup)
                     </h5>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Simpan salinan cadangan langsung ke komputer atau perangkat Anda dalam format JSON utuh maupun format tabel Excel/CSV.
+                    </p>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-medium">Bisa dibuka di Excel / Google Sheets</span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-4 rounded-2xl border border-blue-100 bg-blue-50/50 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center mb-2 shadow-2xs">
+                          <Database className="w-4 h-4" />
+                        </div>
+                        <h6 className="font-bold text-slate-900 text-xs">File Database Lengkap (.JSON)</h6>
+                        <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                          Format cadangan utama sistem yang dapat dipulihkan kapan saja melalui fitur Restore di aplikasi ini.
+                        </p>
+                      </div>
+                      <a
+                        href="/api/backup/download"
+                        download
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-2xs"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Unduh File .JSON</span>
+                      </a>
+                    </div>
+
+                    <div className="p-4 rounded-2xl border border-emerald-100 bg-emerald-50/50 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center mb-2 shadow-2xs">
+                          <FileSpreadsheet className="w-4 h-4" />
+                        </div>
+                        <h6 className="font-bold text-slate-900 text-xs">Master Backup Lengkap (.CSV)</h6>
+                        <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                          Seluruh data profil perusahaan, invoice, pelanggan, jasa, dan mutasi transaksi dalam format CSV untuk Excel.
+                        </p>
+                      </div>
+                      <a
+                        href="/api/spreadsheet/export-full"
+                        download
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-2xs"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        <span>Unduh CSV Lengkap</span>
+                      </a>
+                    </div>
+
+                    <div className="p-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center mb-2 shadow-2xs">
+                          <TableProperties className="w-4 h-4" />
+                        </div>
+                        <h6 className="font-bold text-slate-900 text-xs">Tabel Daftar Invoice (.CSV)</h6>
+                        <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                          Tabel ringkas daftar tagihan invoice, status bayar, jatuh tempo, dan nominal untuk pembukuan akuntansi.
+                        </p>
+                      </div>
+                      <a
+                        href="/api/spreadsheet/export"
+                        download
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-2xs"
+                      >
+                        <TableProperties className="w-3.5 h-3.5" />
+                        <span>Unduh CSV Invoice</span>
+                      </a>
+                    </div>
+                  </div>
                 </div>
+              )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const link = document.createElement('a');
-                        link.href = '/api/spreadsheet/export-full';
-                        link.setAttribute('download', 'invoices_export.csv');
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      } catch (err) {
-                        console.warn('Download error:', err);
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-white hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-slate-800 text-xs font-bold transition shadow-2xs group"
-                    title="Unduh seluruh data: Profil Perusahaan, Invoice, Pelanggan, Jasa, dan Mutasi Transaksi"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
-                    <span className="truncate">Unduh CSV Lengkap</span>
-                  </button>
+              {/* ================= SECTION 4: GOOGLE SPREADSHEET ================= */}
+              {backupSection === 'sheets' && (
+                <div className="space-y-4">
+                  {/* Header Status Banner */}
+                  <div className="rounded-2xl bg-gradient-to-r from-teal-900 via-teal-800 to-slate-900 p-4 sm:p-5 text-white shadow-md">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 border border-teal-400/20">
+                            <Radio className="w-3 h-3 text-teal-400 animate-pulse" />
+                            Pusat Sinkronisasi Spreadsheet
+                          </span>
+                          <span className="text-[10px] text-teal-200">
+                            {googleSheetId || settings?.googleSheetId ? 'Terhubung' : 'Siap Dikonfigurasi'}
+                          </span>
+                        </div>
+                        <h4 className="font-extrabold text-white text-sm sm:text-base">
+                          Sinkronisasi Lengkap ke Google Spreadsheet
+                        </h4>
+                        <p className="text-teal-100/80 text-[11px] mt-0.5 max-w-xl leading-relaxed">
+                          Otomatis simpan nama aplikasi (<strong>{appName}</strong>), profil perusahaan (<strong>{businessName || 'Perusahaan'}</strong>), katalog jasa, pelanggan, invoice, dan transaksi.
+                        </p>
+                      </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const link = document.createElement('a');
-                        link.href = '/api/spreadsheet/export';
-                        link.setAttribute('download', 'invoices_list.csv');
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      } catch (err) {
-                        console.warn('Download error:', err);
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-800 text-xs font-bold transition shadow-2xs group"
-                    title="Unduh tabel daftar invoice berformat CSV standar"
-                  >
-                    <TableProperties className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
-                    <span className="truncate">Unduh CSV Invoice</span>
-                  </button>
+                      {/* Sync Trigger Button */}
+                      <div className="shrink-0 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setIsLocalSyncing(true);
+                            setSyncSuccessMsg(null);
+                            try {
+                              if (onTriggerSync) {
+                                await onTriggerSync();
+                              } else {
+                                await fetch('/api/spreadsheet/sync-webhook', { method: 'POST' });
+                              }
+                              setSyncSuccessMsg('Data perusahaan berhasil disinkronkan ke Google Spreadsheet!');
+                              setTimeout(() => setSyncSuccessMsg(null), 4000);
+                            } catch (e: any) {
+                              console.error(e);
+                            } finally {
+                              setIsLocalSyncing(false);
+                            }
+                          }}
+                          disabled={isSyncing || isLocalSyncing}
+                          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs shadow-md shadow-teal-500/20 transition active:scale-95 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isSyncing || isLocalSyncing ? 'animate-spin' : ''}`} />
+                          <span>{isSyncing || isLocalSyncing ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
+                        </button>
+                      </div>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const link = document.createElement('a');
-                        link.href = '/api/spreadsheet/backup-data';
-                        link.setAttribute('download', 'backup_data.json');
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      } catch (err) {
-                        console.warn('Download error:', err);
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-white hover:bg-purple-50 border border-slate-200 hover:border-purple-300 text-slate-800 text-xs font-bold transition shadow-2xs group"
-                    title="Unduh file JSON mentah untuk arsip backup atau migrasi"
-                  >
-                    <Database className="w-4 h-4 text-purple-600 group-hover:scale-110 transition-transform" />
-                    <span className="truncate">Backup JSON Database</span>
-                  </button>
-                </div>
-              </div>
+                    {/* Status metrics */}
+                    <div className="mt-4 pt-3 border-t border-teal-700/50 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                      <div className="bg-teal-950/40 rounded-xl p-2 border border-teal-700/30">
+                        <span className="text-[10px] text-teal-300 block">Terakhir Disinkronkan:</span>
+                        <span className="font-semibold text-white text-[11px] truncate block">
+                          {settings?.lastSpreadsheetSync ? formatDateTimeIndo(settings.lastSpreadsheetSync) : 'Belum sinkron'}
+                        </span>
+                      </div>
+                      <div className="bg-teal-950/40 rounded-xl p-2 border border-teal-700/30">
+                        <span className="text-[10px] text-teal-300 block">Status Data Invoice:</span>
+                        <span className="font-semibold text-white text-[11px] truncate block">
+                          {invoices.length > 0
+                            ? `${invoices.filter(i => i.spreadsheetSynced).length} / ${invoices.length} Tersinkron`
+                            : 'Database Siap'}
+                        </span>
+                      </div>
+                      <div className="bg-teal-950/40 rounded-xl p-2 border border-teal-700/30 col-span-2 sm:col-span-1">
+                        <span className="text-[10px] text-teal-300 block">Integrasi Webhook:</span>
+                        <span className="font-semibold text-white text-[11px] truncate block">
+                          {googleSheetWebhookUrl ? 'Webhook Aktif' : 'Belum Diatur'}
+                        </span>
+                      </div>
+                    </div>
 
-              {/* 2. Konfigurasi Spreadsheet & Webhook */}
-              <div className="rounded-2xl border border-slate-200 p-4 bg-white space-y-3.5">
+                    {syncSuccessMsg && (
+                      <div className="mt-3 p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>{syncSuccessMsg}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Konfigurasi Spreadsheet & Webhook */}
+                  <div className="rounded-2xl border border-slate-200 p-4 bg-white space-y-3.5">
                 <h5 className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                   <TableProperties className="w-4 h-4 text-teal-600" />
                   <span>Konfigurasi Tautan Google Spreadsheet</span>
@@ -1730,6 +2778,8 @@ function doPost(e) {
               </div>
             </div>
           )}
+            </div>
+          )}
 
           {/* TAB 6: NOTIFIKASI & WHATSAPP OTOMATIS */}
           {activeTab === 'notification' && (
@@ -1968,6 +3018,80 @@ function doPost(e) {
               </button>
             </div>
           </div>
+
+          {/* Modal Konfirmasi Pemulihan (Restore) Database */}
+          {showConfirmRestoreModal && restorePreview && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in zoom-in-95 duration-150">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-slate-900 text-sm sm:text-base">
+                      Konfirmasi Pemulihan Database
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Periksa kembali ringkasan berkas sebelum dipulihkan.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Metode Pemulihan:</span>
+                    <span className="font-bold text-slate-900 uppercase">
+                      {restoreMode === 'replace' ? 'Ganti Total (Replace All)' : 'Gabungkan (Merge)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Jumlah Tagihan di File:</span>
+                    <span className="font-bold text-blue-700">{restorePreview.invoicesCount} Invoice</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Jumlah Pelanggan:</span>
+                    <span className="font-bold text-slate-900">{restorePreview.customersCount} Pelanggan</span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Pengaturan Profil:</span>
+                    <span className="font-bold text-slate-900">
+                      {restoreIncludeSettings ? 'Ikut Diperbarui' : 'Pertahankan yang Ada'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-900 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    Keamanan Data Terjamin
+                  </p>
+                  <p className="text-slate-600 leading-relaxed">
+                    Sistem otomatis membuat file salinan pengaman (snapshot) database saat ini sebelum proses pemulihan dieksekusi.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmRestoreModal(false)}
+                    disabled={isRestoring}
+                    className="px-4 py-2.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleExecuteRestore}
+                    disabled={isRestoring}
+                    className="flex items-center gap-2 px-5 py-2.5 text-xs font-extrabold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/30 transition active:scale-95 disabled:opacity-50"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${isRestoring ? 'animate-spin' : ''}`} />
+                    <span>{isRestoring ? 'Memulihkan Data...' : 'Ya, Pulihkan Sekarang'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </div>
     </div>

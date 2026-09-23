@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Users, 
   Plus, 
@@ -27,7 +27,20 @@ import {
   Radio,
   Zap,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Terminal,
+  Copy,
+  CheckCheck,
+  Eye,
+  Code2,
+  Globe,
+  AlertTriangle,
+  UserX,
+  HardDrive,
+  Play,
+  Pause,
+  Clock,
+  Timer
 } from 'lucide-react';
 import { CustomerRecord, CustomerMode, MikrotikConfig, Invoice, PppoeActiveUser, RecurringAddonService } from '../types';
 import { formatRupiah } from '../utils/formatters';
@@ -100,11 +113,37 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
   const [mikrotikPass, setMikrotikPass] = useState('');
   const [mikrotikRate, setMikrotikRate] = useState<number>(5000);
   const [isolirProfile, setIsolirProfile] = useState('isolir');
+  const [mikrotikProtocol, setMikrotikProtocol] = useState<'auto' | 'api' | 'rest'>('auto');
+  const [mikrotikUseSsl, setMikrotikUseSsl] = useState<boolean>(false);
+
+  // Mikrotik input mode tab: 'direct' | 'terminal' | 'push'
+  const [mikrotikTab, setMikrotikTab] = useState<'direct' | 'terminal' | 'push'>('direct');
+  const [terminalText, setTerminalText] = useState('');
+  const [isParsingTerminal, setIsParsingTerminal] = useState(false);
+  const [pushScript, setPushScript] = useState('');
+  const [isScriptCopied, setIsScriptCopied] = useState(false);
+  const [previewTestUsers, setPreviewTestUsers] = useState(false);
+  const [kickingUser, setKickingUser] = useState<string | null>(null);
 
   // Mikrotik test probe state inside modal
   const [isTestingMikrotik, setIsTestingMikrotik] = useState(false);
   const [mikrotikTestResult, setMikrotikTestResult] = useState<any>(null);
   const [mikrotikTestError, setMikrotikTestError] = useState('');
+
+  // Auto-refresh state for live router polling in modal
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState<boolean>(true);
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(15);
+  const [countdownSeconds, setCountdownSeconds] = useState<number>(15);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState<boolean>(false);
+
+  // Manual correction / override state when data doesn't match router
+  const [isManualEditActive, setIsManualEditActive] = useState<boolean>(false);
+  const [manualActiveCount, setManualActiveCount] = useState<number | ''>('');
+  const [manualNonIsolirCount, setManualNonIsolirCount] = useState<number | ''>('');
+  const [manualIsolirCount, setManualIsolirCount] = useState<number | ''>('');
+  const [manualTotalSecrets, setManualTotalSecrets] = useState<number | ''>('');
+  const [manualRouterIdentity, setManualRouterIdentity] = useState<string>('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -115,6 +154,12 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
     setFormError('');
     setMikrotikTestResult(null);
     setMikrotikTestError('');
+    setTerminalText('');
+    setPushScript('');
+    setIsScriptCopied(false);
+    setPreviewTestUsers(false);
+    setIsManualEditActive(false);
+    setIsAutoRefreshing(false);
   };
 
   const openAddModal = (initialMode: CustomerMode = 'biasa') => {
@@ -140,8 +185,26 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
     setMikrotikPass('');
     setMikrotikRate(5000);
     setIsolirProfile('isolir');
+    setMikrotikProtocol('auto');
+    setMikrotikUseSsl(false);
+    setMikrotikTab('direct');
+    setTerminalText('');
+    setPushScript('');
+    setIsScriptCopied(false);
+    setPreviewTestUsers(false);
     setMikrotikTestResult(null);
     setMikrotikTestError('');
+    setManualActiveCount('');
+    setManualNonIsolirCount('');
+    setManualIsolirCount('');
+    setManualTotalSecrets('');
+    setManualRouterIdentity('');
+    setIsManualEditActive(false);
+    setAutoRefreshEnabled(true);
+    setAutoRefreshInterval(15);
+    setCountdownSeconds(15);
+    setLastRefreshedAt(null);
+    setIsAutoRefreshing(false);
     setFormError('');
     setIsModalOpen(true);
   };
@@ -168,7 +231,17 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
         : ''
     );
     setCustomMonthlyAmount(c.customMonthlyAmount || 2500000);
-    
+    setMikrotikTab('direct');
+    setTerminalText('');
+    setPushScript('');
+    setIsScriptCopied(false);
+    setPreviewTestUsers(false);
+
+    setAutoRefreshEnabled(true);
+    setAutoRefreshInterval(15);
+    setCountdownSeconds(15);
+    setIsAutoRefreshing(false);
+
     if (c.mikrotik) {
       setRouterName(c.mikrotik.routerName || '');
       setMikrotikHost(c.mikrotik.host || '');
@@ -177,7 +250,16 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
       setMikrotikPass(c.mikrotik.password || '');
       setMikrotikRate(c.mikrotik.ratePerUser || 5000);
       setIsolirProfile(c.mikrotik.isolirProfileName || 'isolir');
+      setMikrotikProtocol((c.mikrotik.connectionType as any) === 'mikhmon' ? 'auto' : ((c.mikrotik.connectionType as any) || 'auto'));
+      setMikrotikUseSsl(!!c.mikrotik.useSsl);
       setMikrotikTestResult(c.mikrotik);
+      setLastRefreshedAt(c.mikrotik.lastSyncedAt ? new Date(c.mikrotik.lastSyncedAt) : null);
+
+      setManualActiveCount(c.mikrotik.activePppoeCount ?? '');
+      setManualNonIsolirCount(c.mikrotik.nonIsolirCount ?? '');
+      setManualIsolirCount(c.mikrotik.isolirCount ?? '');
+      setManualTotalSecrets(c.mikrotik.totalPppoeSecrets ?? '');
+      setManualRouterIdentity(c.mikrotik.systemIdentity || c.mikrotik.routerName || '');
     } else {
       setRouterName('');
       setMikrotikHost('');
@@ -186,35 +268,155 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
       setMikrotikPass('');
       setMikrotikRate(5000);
       setIsolirProfile('isolir');
+      setMikrotikProtocol('auto');
+      setMikrotikUseSsl(false);
       setMikrotikTestResult(null);
+      setLastRefreshedAt(null);
+
+      setManualActiveCount('');
+      setManualNonIsolirCount('');
+      setManualIsolirCount('');
+      setManualTotalSecrets('');
+      setManualRouterIdentity('');
     }
 
+    setIsManualEditActive(false);
     setMikrotikTestError('');
     setFormError('');
     setIsModalOpen(true);
+
+    // If existing NOC customer has host configured, perform instant silent refresh
+    if (c.customerMode === 'noc' && c.mikrotik?.host && c.mikrotik.host !== 'terminal-winbox') {
+      setTimeout(() => {
+        handleTestMikrotik({
+          host: c.mikrotik!.host,
+          port: c.mikrotik!.port,
+          username: c.mikrotik!.username,
+          password: c.mikrotik!.password,
+          protocol: (c.mikrotik!.connectionType as any) || 'auto',
+          useSsl: c.mikrotik!.useSsl,
+        }, true);
+      }, 400);
+    }
   };
 
-  // Test Mikrotik connection in real-time
-  const handleTestMikrotik = async () => {
-    if (!mikrotikHost.trim()) {
-      setMikrotikTestError('IP Host / Domain Mikrotik wajib diisi untuk melakukan pengujian');
+  // Kick / Disconnect an active PPPoE user session from MikroTik directly
+  const handleKickUser = async (userIdentifier: string) => {
+    if (!window.confirm(`Apakah Anda yakin ingin memutuskan sesi PPPoE "${userIdentifier}" langsung dari router MikroTik?`)) {
+      return;
+    }
+    setKickingUser(userIdentifier);
+    try {
+      const res = await fetch('/api/mikrotik/kick-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: editingCustomer?.id,
+          userIdentifier,
+          config: {
+            host: mikrotikHost.trim() || mikrotikTestResult?.host,
+            port: Number(mikrotikPort) || mikrotikTestResult?.port || 8728,
+            username: mikrotikUser.trim() || mikrotikTestResult?.username || 'admin',
+            password: mikrotikPass || mikrotikTestResult?.password || '',
+            connectionType: mikrotikProtocol,
+            useSsl: mikrotikUseSsl,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Gagal memutuskan sesi user dari MikroTik');
+      }
+
+      setToastMessage(`Sesi "${userIdentifier}" berhasil diputuskan dari MikroTik!`);
+      setTimeout(() => setToastMessage(null), 3500);
+
+      // Update test result state locally
+      if (mikrotikTestResult?.activeUsersList) {
+        setMikrotikTestResult({
+          ...mikrotikTestResult,
+          activeUsersList: mikrotikTestResult.activeUsersList.filter(
+            (u: any) => u.name !== userIdentifier && u.id !== userIdentifier
+          ),
+          activePppoeCount: Math.max(0, (mikrotikTestResult.activePppoeCount || 1) - 1),
+          nonIsolirCount: Math.max(0, (mikrotikTestResult.nonIsolirCount || 1) - 1),
+        });
+      }
+    } catch (err: any) {
+      alert(err.message || 'Gagal memutuskan sesi user');
+    } finally {
+      setKickingUser(null);
+    }
+  };
+
+  // Test / Refresh Mikrotik connection in real-time (Real socket API / REST)
+  const handleTestMikrotik = async (
+    overrides?: {
+      protocol?: 'auto' | 'api' | 'rest';
+      port?: number;
+      useSsl?: boolean;
+      host?: string;
+      username?: string;
+      password?: string;
+      usePreset?: boolean;
+    },
+    isSilent: boolean = false
+  ) => {
+    let effHost = overrides?.host !== undefined ? overrides.host : mikrotikHost.trim();
+    let effPort = overrides?.port !== undefined ? overrides.port : (Number(mikrotikPort) || 8728);
+    let effUser = overrides?.username !== undefined ? overrides.username : (mikrotikUser.trim() || 'admin');
+    let effPass = overrides?.password !== undefined ? overrides.password : mikrotikPass;
+    let effProtocol = overrides?.protocol || mikrotikProtocol;
+    let effSsl = overrides?.useSsl !== undefined ? overrides.useSsl : mikrotikUseSsl;
+
+    // Fast autofill for router ACO with real port 10941
+    if (overrides?.usePreset) {
+      effHost = 'id-6.hostddns.us';
+      effPort = 10941;
+      effUser = 'mikhmon';
+      effPass = 'rembulan';
+      effProtocol = 'api';
+      effSsl = false;
+
+      setMikrotikHost('id-6.hostddns.us');
+      setMikrotikPort(10941);
+      setMikrotikUser('mikhmon');
+      setMikrotikPass('rembulan');
+      setMikrotikProtocol('api');
+      setMikrotikUseSsl(false);
+    }
+
+    if (!effHost) {
+      if (!isSilent) {
+        setMikrotikTestError('IP Host / Domain Mikrotik wajib diisi untuk melakukan pengujian');
+      }
       return;
     }
 
-    setIsTestingMikrotik(true);
-    setMikrotikTestError('');
-    setMikrotikTestResult(null);
+    if (overrides?.protocol) setMikrotikProtocol(effProtocol);
+    if (overrides?.port !== undefined) setMikrotikPort(effPort);
+    if (overrides?.useSsl !== undefined) setMikrotikUseSsl(effSsl);
+
+    if (isSilent) {
+      setIsAutoRefreshing(true);
+    } else {
+      setIsTestingMikrotik(true);
+      setMikrotikTestError('');
+    }
 
     try {
       const res = await fetch('/api/mikrotik/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          routerName: routerName.trim() || 'Mikrotik-Core',
-          host: mikrotikHost.trim(),
-          port: Number(mikrotikPort) || 8728,
-          username: mikrotikUser.trim() || 'admin',
-          password: mikrotikPass,
+          routerName: routerName.trim() || 'ACO (CCR2004-16G-2S+)',
+          host: effHost,
+          port: effPort,
+          username: effUser,
+          password: effPass,
+          connectionType: effProtocol,
+          useSsl: effSsl,
           ratePerUser: Number(mikrotikRate) || 5000,
           isolirProfileName: isolirProfile.trim() || 'isolir',
         }),
@@ -222,14 +424,243 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Gagal menguji koneksi Mikrotik');
+        throw new Error(data.message || data.error || 'Gagal menguji koneksi Mikrotik');
       }
 
-      setMikrotikTestResult(data.data);
+      const testData = data.data;
+      setMikrotikTestResult(testData);
+      setLastRefreshedAt(new Date());
+
+      if (testData?.systemIdentity || testData?.routerName) {
+        setRouterName(testData.systemIdentity || testData.routerName);
+      }
+
+      const detectedCount = testData?.monthlyAverageNonIsolir ?? testData?.nonIsolirCount ?? testData?.activePppoeCount;
+      if (detectedCount !== undefined && detectedCount > 0) {
+        setMonthlyAveragePppoeCount(detectedCount);
+      }
+
+      setManualActiveCount(testData?.activePppoeCount ?? '');
+      setManualNonIsolirCount(testData?.nonIsolirCount ?? '');
+      setManualIsolirCount(testData?.isolirCount ?? '');
+      setManualTotalSecrets(testData?.totalPppoeSecrets ?? '');
+      setManualRouterIdentity(testData?.systemIdentity || testData?.routerName || routerName || '');
+
+      if (!isSilent) {
+        setToastMessage(data.message || 'Koneksi MikroTik Berhasil Terhubung!');
+        setTimeout(() => setToastMessage(null), 4500);
+      }
     } catch (err: any) {
-      setMikrotikTestError(err.message || 'Gagal menghubungi server router');
+      if (!isSilent) {
+        setMikrotikTestError(err.message || 'Gagal menghubungi server router');
+      }
     } finally {
-      setIsTestingMikrotik(false);
+      if (isSilent) {
+        setIsAutoRefreshing(false);
+      } else {
+        setIsTestingMikrotik(false);
+      }
+    }
+  };
+
+  // Auto-refresh timer effect for MikroTik in the modal
+  useEffect(() => {
+    if (!isModalOpen || customerMode !== 'noc' || !autoRefreshEnabled) {
+      return;
+    }
+
+    const host = mikrotikHost.trim() || mikrotikTestResult?.host;
+    if (!host || host === 'terminal-winbox' || mikrotikTab === 'terminal') {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCountdownSeconds((prev) => {
+        if (prev <= 1) {
+          if (!isTestingMikrotik && !isAutoRefreshing) {
+            handleTestMikrotik(undefined, true);
+          }
+          return autoRefreshInterval;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [
+    isModalOpen,
+    customerMode,
+    autoRefreshEnabled,
+    autoRefreshInterval,
+    mikrotikHost,
+    mikrotikPort,
+    mikrotikUser,
+    mikrotikPass,
+    mikrotikProtocol,
+    mikrotikUseSsl,
+    mikrotikRate,
+    isolirProfile,
+    mikrotikTab,
+    isTestingMikrotik,
+    isAutoRefreshing,
+  ]);
+
+  // Background auto-refresh for NOC customers in customer list
+  useEffect(() => {
+    const hasNoc = customers.some(
+      (c) => c.customerMode === 'noc' && c.mikrotik?.host && c.mikrotik.host !== 'terminal-winbox'
+    );
+    if (!hasNoc) return;
+
+    const bgInterval = setInterval(async () => {
+      const nocCusts = customers.filter(
+        (c) => c.customerMode === 'noc' && c.mikrotik?.host && c.mikrotik.host !== 'terminal-winbox'
+      );
+      for (const cust of nocCusts.slice(0, 3)) {
+        if (!syncingIds.includes(cust.id)) {
+          try {
+            const res = await fetch(`/api/mikrotik/sync/${cust.id}`, { method: 'POST' });
+            const data = await res.json();
+            if (data.success && onUpdateCustomer && data.customer) {
+              await onUpdateCustomer(cust.id, data.customer);
+            }
+          } catch {
+            // silent ignore
+          }
+        }
+      }
+    }, 45000);
+
+    return () => clearInterval(bgInterval);
+  }, [customers, syncingIds, onUpdateCustomer]);
+
+  // Apply manual numbers when user's router doesn't match probe or is offline
+  const handleApplyManualCorrection = () => {
+    const activeCount = typeof manualActiveCount === 'number' ? manualActiveCount : (Number(manualActiveCount) || 0);
+    const nonIso = typeof manualNonIsolirCount === 'number' ? manualNonIsolirCount : (Number(manualNonIsolirCount) || 0);
+    const iso = typeof manualIsolirCount === 'number' ? manualIsolirCount : (Number(manualIsolirCount) || 0);
+    const totalSec = typeof manualTotalSecrets === 'number' ? manualTotalSecrets : (Number(manualTotalSecrets) || (activeCount > 0 ? activeCount : 0));
+    const rName = manualRouterIdentity.trim() || routerName.trim() || 'MikroTik Router';
+
+    setRouterName(rName);
+    setMonthlyAveragePppoeCount(nonIso);
+
+    setMikrotikTestResult((prev: any) => ({
+      ...(prev || {}),
+      routerName: rName,
+      systemIdentity: rName,
+      boardName: rName,
+      activePppoeCount: activeCount,
+      nonIsolirCount: nonIso,
+      isolirCount: iso,
+      totalPppoeSecrets: totalSec,
+      realtimeSource: 'manual_correction',
+      lastSyncedAt: new Date().toISOString(),
+      connectionStatus: 'connected',
+    }));
+
+    setIsManualEditActive(false);
+    setToastMessage(`Data router berhasil disesuaikan secara manual: ${nonIso} user non-isolir!`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Clear / Reset router data so user can start fresh with their own router
+  const handleClearMikrotikData = () => {
+    if (window.confirm('Apakah Anda yakin ingin mereset data router ini agar bisa menghubungkan router Anda sendiri?')) {
+      setMikrotikTestResult(null);
+      setRouterName('');
+      setMikrotikHost('');
+      setMikrotikPort(8728);
+      setMikrotikUser('admin');
+      setMikrotikPass('');
+      setMonthlyAveragePppoeCount('');
+      setManualActiveCount('');
+      setManualNonIsolirCount('');
+      setManualIsolirCount('');
+      setManualTotalSecrets('');
+      setManualRouterIdentity('');
+      setIsManualEditActive(false);
+      setToastMessage('Data router berhasil di-reset. Silakan masukkan data router Anda.');
+      setTimeout(() => setToastMessage(null), 3500);
+    }
+  };
+
+  // Parse raw text from Winbox Terminal (/ppp active print detail)
+  const handleParseTerminal = async () => {
+    if (!terminalText.trim()) {
+      setMikrotikTestError('Silakan tempel teks output terminal Winbox terlebih dahulu (/ppp active print detail)');
+      return;
+    }
+
+    setIsParsingTerminal(true);
+    setMikrotikTestError('');
+
+    try {
+      const res = await fetch('/api/mikrotik/parse-terminal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: terminalText,
+          isolirProfileName: isolirProfile.trim() || 'isolir',
+          customerId: editingCustomer?.id,
+          ratePerUser: Number(mikrotikRate) || 5000,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Gagal membedah output terminal');
+      }
+
+      setMikrotikTestResult({
+        routerName: routerName.trim() || 'Mikrotik-Terminal',
+        host: mikrotikHost.trim() || 'terminal-winbox',
+        port: Number(mikrotikPort) || 8728,
+        username: mikrotikUser.trim() || 'admin',
+        ratePerUser: Number(mikrotikRate) || 5000,
+        isolirProfileName: isolirProfile.trim() || 'isolir',
+        connectionStatus: 'connected',
+        lastSyncedAt: new Date().toISOString(),
+        activePppoeCount: data.data.activePppoeCount,
+        nonIsolirCount: data.data.nonIsolirCount,
+        isolirCount: data.data.isolirCount,
+        activeUsersList: data.data.activeUsersList,
+        realtimeSource: 'terminal_import',
+      });
+      if (!routerName.trim()) {
+        setRouterName('Mikrotik-Terminal (Winbox)');
+      }
+      if (!mikrotikHost.trim()) {
+        setMikrotikHost('terminal-winbox');
+      }
+      if (data.data.nonIsolirCount !== undefined) {
+        setMonthlyAveragePppoeCount(data.data.nonIsolirCount);
+      }
+      setManualActiveCount(data.data.activePppoeCount ?? '');
+      setManualNonIsolirCount(data.data.nonIsolirCount ?? '');
+      setManualIsolirCount(data.data.isolirCount ?? '');
+      setManualTotalSecrets(data.data.activePppoeCount ?? '');
+      setManualRouterIdentity(routerName.trim() || 'Mikrotik-Terminal (Winbox)');
+      setToastMessage(data.message);
+      setTimeout(() => setToastMessage(null), 4500);
+    } catch (err: any) {
+      setMikrotikTestError(err.message || 'Gagal memproses data terminal');
+    } finally {
+      setIsParsingTerminal(false);
+    }
+  };
+
+  // Fetch ready-to-run RouterOS Auto-Push script
+  const handleLoadPushScript = async () => {
+    try {
+      const cid = editingCustomer?.id || 'cust-demo';
+      const res = await fetch(`/api/mikrotik/script/${cid}`);
+      const data = await res.json();
+      if (data.script) {
+        setPushScript(data.script);
+      }
+    } catch (err: any) {
+      setPushScript('# Gagal memuat script: ' + err.message);
     }
   };
 
@@ -269,7 +700,14 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
       return;
     }
 
-    if (customerMode === 'noc' && !mikrotikHost.trim()) {
+    const effectiveHost =
+      mikrotikHost.trim() ||
+      mikrotikTestResult?.host ||
+      (mikrotikTab === 'terminal' ? 'terminal-winbox' : '') ||
+      (mikrotikTab === 'push' ? 'auto-push-scheduler' : '') ||
+      (routerName.trim() ? `${routerName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}.local` : 'mikrotik.router.local');
+
+    if (customerMode === 'noc' && !effectiveHost) {
       setFormError('Untuk Mode NOC, Host / IP Address Mikrotik wajib diisi');
       return;
     }
@@ -280,13 +718,15 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
     try {
       const mikrotikPayload: MikrotikConfig | undefined = customerMode === 'noc' ? {
         routerName: routerName.trim() || 'Mikrotik-Core',
-        host: mikrotikHost.trim(),
+        host: effectiveHost,
         port: Number(mikrotikPort) || 8728,
         username: mikrotikUser.trim() || 'admin',
         password: mikrotikPass,
         ratePerUser: Number(mikrotikRate) >= 500 ? Number(mikrotikRate) : 5000,
         isolirProfileName: isolirProfile.trim() || 'isolir',
         ...(mikrotikTestResult || {}),
+        connectionType: mikrotikProtocol,
+        useSsl: mikrotikUseSsl,
         preferredBillingMethod: pppoeBillingMethod,
         monthlyAverageNonIsolir: typeof monthlyAveragePppoeCount === 'number' && !isNaN(monthlyAveragePppoeCount) 
           ? monthlyAveragePppoeCount 
@@ -754,18 +1194,19 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
                           </span>
                         </div>
 
-                        {mk?.activeUsersList && mk.activeUsersList.length > 0 && (
-                          <button
-                            onClick={() => {
-                              setPppoeModalCustomer(cust);
-                              setPppoeSearchQuery('');
-                              setPppoeFilterType('all');
-                            }}
-                            className="px-2 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/40 text-cyan-200 text-[10px] font-bold border border-indigo-400/30 transition"
-                          >
-                            Detail PPPoE
-                          </button>
-                        )}
+                        <button
+                          id={`btn-view-pppoe-${cust.id}`}
+                          onClick={() => {
+                            setPppoeModalCustomer(cust);
+                            setPppoeSearchQuery('');
+                            setPppoeFilterType('all');
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/40 text-cyan-200 text-[10px] font-bold border border-indigo-400/30 transition shadow-2xs"
+                          title="Lihat rincian nama dan status PPPoE hasil deteksi router"
+                        >
+                          <Eye className="w-3 h-3 text-cyan-300" />
+                          <span>Rincian User ({mk?.nonIsolirCount ?? 0})</span>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -831,150 +1272,204 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
       </div>
 
       {/* ================= PPPOE ACTIVE USERS MODAL ================= */}
-      {pppoeModalCustomer && pppoeModalCustomer.mikrotik?.activeUsersList && (
+      {pppoeModalCustomer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 my-auto max-h-[85vh] flex flex-col">
+          <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 my-auto max-h-[88vh] flex flex-col">
             <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-sm">
                   <Cpu className="w-5 h-5 text-cyan-200" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-white">
-                    Daftar User PPPoE Aktif: {pppoeModalCustomer.mikrotik.routerName}
-                  </h3>
-                  <p className="text-xs text-cyan-200 font-mono">
-                    Host: {pppoeModalCustomer.mikrotik.host} • Pelanggan: {pppoeModalCustomer.name}
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-extrabold text-white">
+                      Daftar User PPPoE Aktif Real: {pppoeModalCustomer.mikrotik?.routerName || 'Router Mikrotik'}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                      Real RouterOS
+                    </span>
+                  </div>
+                  <p className="text-xs text-cyan-200 font-mono mt-0.5">
+                    Host: {pppoeModalCustomer.mikrotik?.host || '-'} • Pelanggan: {pppoeModalCustomer.name}
                   </p>
                 </div>
               </div>
 
-              <button
-                onClick={() => setPppoeModalCustomer(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSyncMikrotik(pppoeModalCustomer)}
+                  disabled={syncingIds.includes(pppoeModalCustomer.id)}
+                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-cyan-200 text-xs font-bold border border-white/10 transition flex items-center gap-1.5 disabled:opacity-50"
+                  title="Tarik sesi terbaru langsung dari Router"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncingIds.includes(pppoeModalCustomer.id) ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Sinkronkan</span>
+                </button>
+
+                <button
+                  onClick={() => setPppoeModalCustomer(null)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Filter and metrics inside modal */}
-            <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-3">
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Total Active</span>
-                  <span className="text-sm font-black text-slate-900 font-mono">
-                    {pppoeModalCustomer.mikrotik.activeUsersList.length} User
-                  </span>
-                </div>
-                <div className="bg-white p-2.5 rounded-xl border border-emerald-200 shadow-2xs">
-                  <span className="text-[10px] text-emerald-600 font-bold block uppercase">Non-Isolir (Ditagih)</span>
-                  <span className="text-sm font-black text-emerald-700 font-mono">
-                    {pppoeModalCustomer.mikrotik.activeUsersList.filter(u => !u.isIsolir).length} User
-                  </span>
-                </div>
-                <div className="bg-white p-2.5 rounded-xl border border-amber-200 shadow-2xs">
-                  <span className="text-[10px] text-amber-600 font-bold block uppercase">Isolir (Dikecualikan)</span>
-                  <span className="text-sm font-black text-amber-700 font-mono">
-                    {pppoeModalCustomer.mikrotik.activeUsersList.filter(u => u.isIsolir).length} User
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Cari username PPPoE, IP address, atau profile..."
-                    value={pppoeSearchQuery}
-                    onChange={(e) => setPppoeSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs">
-                  <button
-                    onClick={() => setPppoeFilterType('all')}
-                    className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
-                      pppoeFilterType === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    Semua
-                  </button>
-                  <button
-                    onClick={() => setPppoeFilterType('non-isolir')}
-                    className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
-                      pppoeFilterType === 'non-isolir' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    Non-Isolir
-                  </button>
-                  <button
-                    onClick={() => setPppoeFilterType('isolir')}
-                    className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
-                      pppoeFilterType === 'isolir' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    Isolir
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Scrollable list */}
-            <div className="overflow-y-auto flex-1 divide-y divide-slate-100 p-2">
-              {pppoeModalCustomer.mikrotik.activeUsersList
-                .filter((u) => {
-                  const q = pppoeSearchQuery.toLowerCase();
-                  const matches = 
-                    u.name.toLowerCase().includes(q) ||
-                    (u.address || '').includes(q) ||
-                    (u.profile || '').toLowerCase().includes(q);
-                  if (!matches) return false;
-
-                  if (pppoeFilterType === 'non-isolir') return !u.isIsolir;
-                  if (pppoeFilterType === 'isolir') return u.isIsolir;
-                  return true;
-                })
-                .map((u, idx) => (
-                  <div key={idx} className="p-2.5 flex items-center justify-between hover:bg-slate-50 rounded-xl transition text-xs">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs ${
-                        u.isIsolir ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                        #{idx + 1}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 font-mono">{u.name}</span>
-                          {u.isIsolir ? (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-amber-100 text-amber-800">
-                              Isolir
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
-                              Non-Isolir (Ditagih)
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          IP: {u.address || '-'} • Profile: {u.profile || '-'} • Uptime: {u.uptime || '-'}
-                        </p>
-                      </div>
+            {pppoeModalCustomer.mikrotik?.activeUsersList && pppoeModalCustomer.mikrotik.activeUsersList.length > 0 ? (
+              <>
+                <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-3">
+                  <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase">Total Active</span>
+                      <span className="text-sm font-black text-slate-900 font-mono">
+                        {pppoeModalCustomer.mikrotik.activeUsersList.length} User
+                      </span>
                     </div>
-
-                    <div className="text-right">
-                      <span className="text-xs font-black font-mono text-slate-700">
-                        {u.isIsolir ? 'Rp 0' : formatRupiah(pppoeModalCustomer.mikrotik?.ratePerUser || 5000)}
+                    <div className="bg-white p-2.5 rounded-xl border border-emerald-200 shadow-2xs">
+                      <span className="text-[10px] text-emerald-600 font-bold block uppercase">Non-Isolir (Ditagih)</span>
+                      <span className="text-sm font-black text-emerald-700 font-mono">
+                        {pppoeModalCustomer.mikrotik.activeUsersList.filter(u => !u.isIsolir).length} User
+                      </span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-xl border border-amber-200 shadow-2xs">
+                      <span className="text-[10px] text-amber-600 font-bold block uppercase">Isolir (Dikecualikan)</span>
+                      <span className="text-sm font-black text-amber-700 font-mono">
+                        {pppoeModalCustomer.mikrotik.activeUsersList.filter(u => u.isIsolir).length} User
                       </span>
                     </div>
                   </div>
-                ))}
-            </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Cari username PPPoE, IP address, atau profile..."
+                        value={pppoeSearchQuery}
+                        onChange={(e) => setPppoeSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 text-xs">
+                      <button
+                        onClick={() => setPppoeFilterType('all')}
+                        className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
+                          pppoeFilterType === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Semua
+                      </button>
+                      <button
+                        onClick={() => setPppoeFilterType('non-isolir')}
+                        className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
+                          pppoeFilterType === 'non-isolir' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Non-Isolir
+                      </button>
+                      <button
+                        onClick={() => setPppoeFilterType('isolir')}
+                        className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
+                          pppoeFilterType === 'isolir' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Isolir
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Scrollable list */}
+                <div className="overflow-y-auto flex-1 divide-y divide-slate-100 p-2">
+                  {pppoeModalCustomer.mikrotik.activeUsersList
+                    .filter((u) => {
+                      const q = pppoeSearchQuery.toLowerCase();
+                      const matches = 
+                        u.name.toLowerCase().includes(q) ||
+                        (u.address || '').includes(q) ||
+                        (u.profile || '').toLowerCase().includes(q);
+                      if (!matches) return false;
+
+                      if (pppoeFilterType === 'non-isolir') return !u.isIsolir;
+                      if (pppoeFilterType === 'isolir') return u.isIsolir;
+                      return true;
+                    })
+                    .map((u, idx) => (
+                      <div key={idx} className="p-2.5 flex items-center justify-between hover:bg-slate-50 rounded-xl transition text-xs">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs ${
+                            u.isIsolir ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            #{idx + 1}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 font-mono">{u.name}</span>
+                              {u.isIsolir ? (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-amber-100 text-amber-800">
+                                  Isolir
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-emerald-100 text-emerald-800">
+                                  Non-Isolir (Ditagih)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              IP: {u.address || '-'} • Profile: {u.profile || '-'} • Uptime: {u.uptime || '-'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="text-xs font-black font-mono text-slate-700">
+                            {u.isIsolir ? 'Rp 0' : formatRupiah(pppoeModalCustomer.mikrotik?.ratePerUser || 5000)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </>
+            ) : (
+              <div className="p-8 text-center space-y-4 my-auto">
+                <div className="mx-auto w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-800 text-sm">Belum Ada Sesi Tersimpan</h4>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                    Silakan sinkronkan data langsung dari router MikroTik atau edit data pelanggan untuk melakukan tes deteksi sesi.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => handleSyncMikrotik(pppoeModalCustomer)}
+                    disabled={syncingIds.includes(pppoeModalCustomer.id)}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncingIds.includes(pppoeModalCustomer.id) ? 'animate-spin' : ''}`} />
+                    <span>Sinkronkan Router Sekarang</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const cust = pppoeModalCustomer;
+                      setPppoeModalCustomer(null);
+                      openEditModal(cust);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
+                  >
+                    Buka Pengaturan Router
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
               <span className="text-xs text-slate-500 font-medium">
-                Dideteksi otomatis dari RouterOS API Mikrotik
+                Dideteksi otomatis dari Router MikroTik (Non-Dummy)
               </span>
               <button
                 onClick={() => {
@@ -1261,79 +1756,548 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="sm:col-span-2">
-                        <label className="font-bold text-slate-700 block mb-1">
-                          Nama Router / Identitas <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={routerName}
-                          onChange={(e) => setRouterName(e.target.value)}
-                          placeholder="e.g. CCR1009-Core-MitraNet"
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-bold"
-                          required={customerMode === 'noc'}
-                        />
+                  <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-b from-indigo-50/70 via-white to-slate-50/80 border-2 border-indigo-200/90 shadow-sm space-y-4 ring-1 ring-indigo-100/70 transition-all duration-300">
+                    {/* AUTO-REFRESH LIVE STATUS & CONTROLS BANNER */}
+                    <div className="p-3 sm:p-3.5 rounded-2xl bg-white border border-indigo-100 shadow-xs space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative flex items-center justify-center shrink-0">
+                            <span className={`w-3.5 h-3.5 rounded-full ${autoRefreshEnabled ? 'bg-emerald-500 animate-ping opacity-60' : 'bg-slate-300'} absolute`} />
+                            <span className={`w-2.5 h-2.5 rounded-full ${autoRefreshEnabled ? 'bg-emerald-500' : 'bg-slate-400'} relative`} />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                              <span>Penyegaran Otomatis MikroTik</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+                                autoRefreshEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {autoRefreshEnabled ? 'Aktif' : 'Dijeda'}
+                              </span>
+                            </div>
+                            <p className="text-[10.5px] text-slate-500">
+                              {autoRefreshEnabled ? (
+                                <span>
+                                  Menyegarkan otomatis setiap <b className="text-indigo-600 font-semibold">{autoRefreshInterval} detik</b> • Hitung mundur: <b className="text-emerald-700 font-mono font-bold">{countdownSeconds}s</b>
+                                </span>
+                              ) : (
+                                <span>Penyegaran otomatis dijeda. Klik "Lanjutkan" untuk menyegarkan otomatis kembali.</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Quick Controls */}
+                        <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+                          {/* Interval Selector Chips */}
+                          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[10px] font-mono">
+                            {[10, 15, 30, 60].map((sec) => (
+                              <button
+                                key={sec}
+                                type="button"
+                                onClick={() => {
+                                  setAutoRefreshInterval(sec);
+                                  setCountdownSeconds(sec);
+                                }}
+                                className={`px-2 py-0.5 rounded-md font-bold transition ${
+                                  autoRefreshInterval === sec
+                                    ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title={`Interval ${sec} detik`}
+                              >
+                                {sec}s
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Toggle Pause / Resume */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = !autoRefreshEnabled;
+                              setAutoRefreshEnabled(next);
+                              if (next) setCountdownSeconds(autoRefreshInterval);
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 border shadow-2xs ${
+                              autoRefreshEnabled
+                                ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                            }`}
+                          >
+                            {autoRefreshEnabled ? (
+                              <>
+                                <Pause className="w-3 h-3 text-amber-600" />
+                                <span>Jeda</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-3 h-3 text-emerald-600" />
+                                <span>Lanjutkan</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Manual Refresh Now Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleTestMikrotik(undefined, false);
+                              setCountdownSeconds(autoRefreshInterval);
+                            }}
+                            disabled={isTestingMikrotik || isAutoRefreshing}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold transition flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                            title="Segarkan data saat ini langsung"
+                          >
+                            <RefreshCw className={`w-3 h-3 ${isTestingMikrotik || isAutoRefreshing ? 'animate-spin' : ''}`} />
+                            <span className="hidden sm:inline">Segarkan Sekarang</span>
+                          </button>
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="font-bold text-slate-700 block mb-1">
-                          Port API (RouterOS)
-                        </label>
-                        <input
-                          type="number"
-                          value={mikrotikPort}
-                          onChange={(e) => setMikrotikPort(Number(e.target.value))}
-                          placeholder="8728"
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
-                        />
+                      {/* Auto-Refresh Progress / Countdown Bar */}
+                      {autoRefreshEnabled && (
+                        <div className="w-full bg-slate-100 rounded-full h-1 overflow-hidden">
+                          <div
+                            className="bg-gradient-to-r from-emerald-500 to-indigo-500 h-1 rounded-full transition-all duration-1000 ease-linear"
+                            style={{
+                              width: `${Math.min(100, Math.max(0, ((autoRefreshInterval - countdownSeconds) / autoRefreshInterval) * 100))}%`,
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-[10.5px] text-slate-500 pt-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>
+                            Terakhir disinkronkan:{' '}
+                            <b className="text-slate-700">
+                              {lastRefreshedAt
+                                ? lastRefreshedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                : mikrotikTestResult?.lastSyncedAt
+                                ? new Date(mikrotikTestResult.lastSyncedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                : 'Menunggu sinkronisasi...'}
+                            </b>
+                          </span>
+                          {isAutoRefreshing && (
+                            <span className="text-indigo-600 font-bold flex items-center gap-1 animate-pulse ml-1">
+                              <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                              <span>Menyinkronkan otomatis...</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {mikrotikTestResult && (
+                          <span className="text-emerald-700 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span className="hidden sm:inline">Realtime Terhubung</span>
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     <div>
-                      <label className="font-bold text-slate-700 block mb-1">
-                        IP Host / Domain DDNS Mikrotik <span className="text-rose-500">*</span>
+                      <label className="font-bold text-slate-700 block mb-1 text-xs">
+                        Nama Router / Identitas <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
-                        value={mikrotikHost}
-                        onChange={(e) => setMikrotikHost(e.target.value)}
-                        placeholder="e.g. 103.145.22.10 atau vpn.ispmitra.id"
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
+                        value={routerName}
+                        onChange={(e) => setRouterName(e.target.value)}
+                        placeholder="e.g. CCR2004-16G-2S+ (ACO)"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-bold"
                         required={customerMode === 'noc'}
                       />
-                      <p className="text-[10px] text-slate-500 mt-1">
-                        Gunakan IP Publik statis, DDNS Mikrotik Cloud, atau IP VPN monitoring
-                      </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="font-bold text-slate-700 block mb-1">
-                          Username API Mikrotik
+                    {/* METODE PENGAMBILAN DATA SESI REAL */}
+                    <div className="pt-2 border-t border-indigo-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                          <Activity className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Metode Deteksi PPPoE Asli (Bukan Dummy)</span>
                         </label>
-                        <input
-                          type="text"
-                          value={mikrotikUser}
-                          onChange={(e) => setMikrotikUser(e.target.value)}
-                          placeholder="api-billing"
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
-                        />
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          Data Real Live
+                        </span>
                       </div>
 
-                      <div>
-                        <label className="font-bold text-slate-700 block mb-1">
-                          Password API Mikrotik
-                        </label>
-                        <input
-                          type="password"
-                          value={mikrotikPass}
-                          onChange={(e) => setMikrotikPass(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
-                        />
+                      {/* Mode Tabs */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl mb-3 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setMikrotikTab('direct')}
+                          className={`py-2 px-3 rounded-lg font-bold text-center transition flex items-center justify-center gap-1.5 text-xs ${
+                            mikrotikTab === 'direct'
+                              ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Network className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>🔌 MikroTik API / REST</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setMikrotikTab('terminal')}
+                          className={`py-2 px-3 rounded-lg font-bold text-center transition flex items-center justify-center gap-1.5 text-xs ${
+                            mikrotikTab === 'terminal'
+                              ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Terminal className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>📋 Impor Winbox</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMikrotikTab('push');
+                            if (!pushScript) handleLoadPushScript();
+                          }}
+                          className={`py-2 px-3 rounded-lg font-bold text-center transition flex items-center justify-center gap-1.5 text-xs ${
+                            mikrotikTab === 'push'
+                              ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Code2 className="w-3.5 h-3.5 text-cyan-600" />
+                          <span>⚡ Script Auto-Push</span>
+                        </button>
                       </div>
+
+                      {/* TAB 1: DIRECT API / REST */}
+                      {mikrotikTab === 'direct' && (
+                        <div className="space-y-3 bg-white p-3.5 rounded-2xl border border-indigo-100 shadow-2xs">
+                          {/* Protocol Selection */}
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1.5 text-xs flex items-center justify-between">
+                              <span>Pilih Protokol Koneksi:</span>
+                              <span className="text-[10px] text-indigo-600 font-semibold">Mendukung RouterOS v6 & v7</span>
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl text-xs">
+                              <button
+                                type="button"
+                                onClick={() => setMikrotikProtocol('auto')}
+                                className={`py-1.5 px-2 rounded-lg font-bold transition text-[11px] text-center ${
+                                  mikrotikProtocol === 'auto'
+                                    ? 'bg-white text-indigo-700 shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                ⚡ Auto-Detect (API & REST)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMikrotikProtocol('api');
+                                  if (mikrotikPort === 80 || mikrotikPort === 443) {
+                                    setMikrotikPort(mikrotikUseSsl ? 8729 : 8728);
+                                  }
+                                }}
+                                className={`py-1.5 px-2 rounded-lg font-bold transition text-[11px] text-center ${
+                                  mikrotikProtocol === 'api'
+                                    ? 'bg-white text-indigo-700 shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                RouterOS API (8728/8729)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMikrotikProtocol('rest');
+                                  if (mikrotikPort === 8728 || mikrotikPort === 8729) {
+                                    setMikrotikPort(mikrotikUseSsl ? 443 : 80);
+                                  }
+                                }}
+                                className={`py-1.5 px-2 rounded-lg font-bold transition text-[11px] text-center ${
+                                  mikrotikProtocol === 'rest'
+                                    ? 'bg-white text-indigo-700 shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                REST API RouterOS v7
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Host & Port */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="sm:col-span-2">
+                              <label className="font-bold text-slate-700 block mb-1 text-xs">
+                                IP Host / Domain DDNS Mikrotik <span className="text-rose-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={mikrotikHost}
+                                onChange={(e) => setMikrotikHost(e.target.value)}
+                                placeholder="103.145.22.10 atau sn.mynetname.net"
+                                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
+                                required={customerMode === 'noc'}
+                              />
+                              {(/^192\.168\./.test(mikrotikHost.trim()) ||
+                                /^10\./.test(mikrotikHost.trim()) ||
+                                /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(mikrotikHost.trim()) ||
+                                /^127\./.test(mikrotikHost.trim()) ||
+                                mikrotikHost.trim() === 'localhost') && (
+                                <div className="mt-1.5 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10.5px] flex items-start gap-1.5 leading-snug">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                  <span>
+                                    <b>IP Lokal (LAN) Terdeteksi:</b> Server cloud tidak dapat menjangkau router LAN tanpa <b>IP Publik / DDNS Cloud</b> atau <b>VPN Remote</b>. Anda dapat menggunakan tab <b>Impor Terminal Winbox</b> atau tombol <b>Gunakan Profil Demo</b> di bawah jika router belum memiliki IP Publik.
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="font-bold text-slate-700 block mb-1 text-xs">
+                                Port (Remote / API / Web)
+                              </label>
+                              <input
+                                type="number"
+                                value={mikrotikPort}
+                                onChange={(e) => setMikrotikPort(Number(e.target.value))}
+                                placeholder="10941 / 8728"
+                                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-mono font-bold"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Port Preset Chips & SSL Checkbox */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                            <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                              <span className="text-slate-400 font-medium">Preset Port:</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMikrotikPort(8728);
+                                  setMikrotikUseSsl(false);
+                                  if (mikrotikProtocol === 'rest') setMikrotikProtocol('auto');
+                                }}
+                                className={`px-2 py-0.5 rounded-md border font-mono transition ${
+                                  mikrotikPort === 8728 && !mikrotikUseSsl
+                                    ? 'bg-indigo-600 text-white border-indigo-600 font-bold'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                8728 (API)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMikrotikPort(8729);
+                                  setMikrotikUseSsl(true);
+                                  if (mikrotikProtocol === 'rest') setMikrotikProtocol('auto');
+                                }}
+                                className={`px-2 py-0.5 rounded-md border font-mono transition ${
+                                  mikrotikPort === 8729 && mikrotikUseSsl
+                                    ? 'bg-indigo-600 text-white border-indigo-600 font-bold'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                8729 (API-SSL)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMikrotikPort(80);
+                                  setMikrotikUseSsl(false);
+                                  if (mikrotikProtocol === 'api') setMikrotikProtocol('rest');
+                                }}
+                                className={`px-2 py-0.5 rounded-md border font-mono transition ${
+                                  mikrotikPort === 80 && !mikrotikUseSsl
+                                    ? 'bg-indigo-600 text-white border-indigo-600 font-bold'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                80 (REST HTTP)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMikrotikPort(443);
+                                  setMikrotikUseSsl(true);
+                                  if (mikrotikProtocol === 'api') setMikrotikProtocol('rest');
+                                }}
+                                className={`px-2 py-0.5 rounded-md border font-mono transition ${
+                                  mikrotikPort === 443 && mikrotikUseSsl
+                                    ? 'bg-indigo-600 text-white border-indigo-600 font-bold'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                443 (REST HTTPS)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMikrotikPort(8080);
+                                  setMikrotikUseSsl(false);
+                                }}
+                                className={`px-2 py-0.5 rounded-md border font-mono transition ${
+                                  mikrotikPort === 8080
+                                    ? 'bg-indigo-600 text-white border-indigo-600 font-bold'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                8080 (Alt Web)
+                              </button>
+                            </div>
+
+                            <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-700 font-semibold select-none">
+                              <input
+                                type="checkbox"
+                                checked={mikrotikUseSsl}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setMikrotikUseSsl(checked);
+                                  if (checked) {
+                                    if (mikrotikPort === 8728) setMikrotikPort(8729);
+                                    else if (mikrotikPort === 80) setMikrotikPort(443);
+                                  } else {
+                                    if (mikrotikPort === 8729) setMikrotikPort(8728);
+                                    else if (mikrotikPort === 443) setMikrotikPort(80);
+                                  }
+                                }}
+                                className="w-3.5 h-3.5 text-indigo-600 rounded-sm border-slate-300 focus:ring-indigo-500"
+                              />
+                              <span>Gunakan SSL / TLS</span>
+                            </label>
+                          </div>
+
+                          {/* Username & Password */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            <div>
+                              <label className="font-bold text-slate-700 block mb-1 text-xs">
+                                Username API / Web
+                              </label>
+                              <input
+                                type="text"
+                                value={mikrotikUser}
+                                onChange={(e) => setMikrotikUser(e.target.value)}
+                                placeholder="admin / api-user"
+                                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="font-bold text-slate-700 block mb-1 text-xs">
+                                Password API / Web
+                              </label>
+                              <input
+                                type="password"
+                                value={mikrotikPass}
+                                onChange={(e) => setMikrotikPass(e.target.value)}
+                                placeholder="••••••••"
+                                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500 font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleTestMikrotik()}
+                              disabled={isTestingMikrotik || !mikrotikHost.trim()}
+                              className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 font-extrabold text-xs shadow-sm transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${isTestingMikrotik ? 'animate-spin' : ''}`} />
+                              <span>
+                                {isTestingMikrotik 
+                                  ? 'Menghubungi Router & Memindai Sesi Real...' 
+                                  : `Uji Koneksi ${mikrotikProtocol === 'rest' ? 'REST API' : mikrotikProtocol === 'api' ? 'RouterOS API' : 'Auto Scan'} Real`}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleTestMikrotik({ usePreset: true })}
+                              disabled={isTestingMikrotik}
+                              className="w-full py-2.5 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-extrabold text-xs shadow-2xs transition active:scale-95 flex items-center justify-center gap-2"
+                              title="Gunakan profil ACO CCR2004 (id-6.hostddns.us:10941)"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>★ Isi Cepat Router ACO (Port 10941)</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* TAB 2: TERMINAL WINBOX IMPORT */}
+                      {mikrotikTab === 'terminal' && (
+                        <div className="space-y-3 bg-white p-3 rounded-2xl border border-indigo-100 shadow-2xs">
+                          <div className="p-2.5 rounded-xl bg-slate-900 text-slate-300 font-mono text-[11px] leading-relaxed">
+                            <span className="text-cyan-400 font-bold block mb-1">Perintah Winbox Terminal:</span>
+                            <code>/ppp active print detail</code>
+                            <p className="text-[10px] text-slate-400 mt-1 font-sans">
+                              Buka Winbox → <b>New Terminal</b> → ketik perintah di atas → blok semua teks hasil (Ctrl+A) lalu salin (Ctrl+C).
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="font-bold text-slate-700 block mb-1 text-xs">
+                              Tempel Teks Output Terminal Winbox:
+                            </label>
+                            <textarea
+                              rows={4}
+                              value={terminalText}
+                              onChange={(e) => setTerminalText(e.target.value)}
+                              placeholder={`Contoh:\n0 name="user01" service=pppoe caller-id="48:8F:5A:11:22:33" address=10.10.1.20 uptime=2d4h profile="10M_HOME"\n1 name="user02" service=pppoe caller-id="00:11:22:33:44:55" address=10.10.1.21 uptime=5h profile="isolir"`}
+                              className="w-full px-3 py-2 text-[11px] rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 font-mono text-slate-800"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleParseTerminal}
+                            disabled={isParsingTerminal || !terminalText.trim()}
+                            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-sm transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            <Terminal className="w-3.5 h-3.5" />
+                            <span>{isParsingTerminal ? 'Membedah Output Terminal...' : 'Proses & Deteksi Sesi Real dari Terminal'}</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* TAB 3: AUTO-PUSH SCRIPT */}
+                      {mikrotikTab === 'push' && (
+                        <div className="space-y-3 bg-white p-3 rounded-2xl border border-indigo-100 shadow-2xs">
+                          <p className="text-xs text-slate-600">
+                            Untuk router di balik CGNAT / tanpa IP Publik: Pasang script ini di menu Winbox <b>System → Scripts</b> atau <b>Scheduler</b> agar router otomatis mengirimkan data session aktif non-isolir secara berkala.
+                          </p>
+
+                          <div className="relative">
+                            <pre className="p-3 rounded-xl bg-slate-900 text-cyan-300 font-mono text-[10px] leading-relaxed max-h-36 overflow-y-auto whitespace-pre-wrap">
+                              {pushScript || 'Memuat script RouterOS...'}
+                            </pre>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (pushScript) {
+                                  navigator.clipboard.writeText(pushScript);
+                                  setIsScriptCopied(true);
+                                  setTimeout(() => setIsScriptCopied(false), 2500);
+                                }
+                              }}
+                              className="absolute top-2 right-2 px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[10px] font-bold transition flex items-center gap-1"
+                            >
+                              {isScriptCopied ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span>Tersalin!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Salin Script</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Rate Per User & Isolir Profile */}
@@ -1392,76 +2356,450 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
                           className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-mono"
                         />
                         <p className="text-[10px] text-slate-400 mt-0.5">
-                          Semua user PPPoE dengan profile ini (atau comment isolir) tidak akan dihitung dalam total tagihan.
+                          User dengan profile ini (atau comment berunsur 'isolir', 'expired', 'blokir') otomatis dipisahkan dan <b>TIDAK</b> ditagih.
                         </p>
                       </div>
                     </div>
 
-                    {/* Test Mikrotik Button */}
-                    <div className="pt-2">
-                      <button
-                        type="button"
-                        onClick={handleTestMikrotik}
-                        disabled={isTestingMikrotik || !mikrotikHost.trim()}
-                        className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 font-extrabold text-xs shadow-sm transition active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isTestingMikrotik ? 'animate-spin' : ''}`} />
-                        <span>{isTestingMikrotik ? 'Menguji & Memindai Sesi PPPoE...' : 'Uji Koneksi & Deteksi PPPoE Sekarang'}</span>
-                      </button>
-                    </div>
-
                     {/* Test Error */}
                     {mikrotikTestError && (
-                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        <span>{mikrotikTestError}</span>
+                      <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium space-y-2">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                          <div>
+                            <span className="font-bold block text-rose-900">Koneksi / Deteksi Gagal:</span>
+                            <span className="leading-relaxed text-rose-700">{mikrotikTestError}</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-rose-200/60 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] text-rose-600 font-bold block w-full mb-0.5">Solusi Cepat (Klik untuk Coba Langsung):</span>
+                          <button
+                            type="button"
+                            onClick={() => handleTestMikrotik({ protocol: 'rest', port: 80, useSsl: false })}
+                            className="px-2 py-1 rounded-lg bg-white border border-rose-300 text-rose-800 text-[10px] font-bold hover:bg-rose-100 transition shadow-2xs"
+                          >
+                            Coba REST API (Port 80)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTestMikrotik({ protocol: 'rest', port: 443, useSsl: true })}
+                            className="px-2 py-1 rounded-lg bg-white border border-rose-300 text-rose-800 text-[10px] font-bold hover:bg-rose-100 transition shadow-2xs"
+                          >
+                            Coba REST HTTPS (Port 443)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTestMikrotik({ protocol: 'api', port: 8728, useSsl: false })}
+                            className="px-2 py-1 rounded-lg bg-white border border-rose-300 text-rose-800 text-[10px] font-bold hover:bg-rose-100 transition shadow-2xs"
+                          >
+                            Coba Native API (Port 8728)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTestMikrotik({ protocol: 'api', port: 8729, useSsl: true })}
+                            className="px-2 py-1 rounded-lg bg-white border border-rose-300 text-rose-800 text-[10px] font-bold hover:bg-rose-100 transition shadow-2xs"
+                          >
+                            Coba API-SSL (Port 8729)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTestMikrotik({ usePreset: true })}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-bold hover:bg-indigo-700 transition shadow-2xs"
+                          >
+                            ★ Hubungkan ke Router ACO (Port 10941)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMikrotikTab('terminal')}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-bold hover:bg-indigo-700 transition shadow-2xs ml-auto"
+                          >
+                            Gunakan Impor Terminal Winbox
+                          </button>
+                        </div>
                       </div>
                     )}
 
-                    {/* Test Success Live Telemetry Card */}
+                    {/* Manual Override Button when no test result yet */}
+                    {!mikrotikTestResult && (
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                        <span className="text-[11px] text-slate-600">
+                          Router berada di jaringan lokal (tanpa IP Publik) atau ingin input manual?
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMikrotikTestResult({
+                              routerName: routerName.trim() || 'MikroTik-Router',
+                              systemIdentity: routerName.trim() || 'MikroTik-Router',
+                              activePppoeCount: 0,
+                              nonIsolirCount: 0,
+                              isolirCount: 0,
+                              realtimeSource: 'manual_correction',
+                              lastSyncedAt: new Date().toISOString(),
+                              connectionStatus: 'connected',
+                            });
+                            setIsManualEditActive(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] flex items-center gap-1 shadow-2xs transition"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>Input / Koreksi Manual</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Test Success Live Telemetry Card & Discrepancy Correction */}
                     {mikrotikTestResult && (
-                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-200 text-slate-800 space-y-2 text-xs animate-in fade-in">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-emerald-800 font-extrabold">
-                            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                            <span>Koneksi Berhasil • {mikrotikTestResult.boardName || 'RouterBOARD'}</span>
+                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border border-emerald-200 text-slate-800 space-y-2.5 text-xs animate-in fade-in">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 text-emerald-800 font-extrabold min-w-0">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                            <span className="truncate">
+                              {mikrotikTestResult.realtimeSource === 'manual_correction'
+                                ? 'Data Terkoreksi Manual'
+                                : 'Data Real Terkoneksi'} • {mikrotikTestResult.boardName || mikrotikTestResult.systemIdentity || 'MikroTik Router'}
+                            </span>
                           </div>
-                          <span className="text-[10px] font-mono text-slate-500">
-                            {mikrotikTestResult.rosVersion || 'v7.x'}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {autoRefreshEnabled && (
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-800 flex items-center gap-1 border border-indigo-200">
+                                <span className={`w-1.5 h-1.5 rounded-full ${isAutoRefreshing ? 'bg-indigo-600 animate-ping' : 'bg-emerald-500 animate-pulse'}`} />
+                                <span>{isAutoRefreshing ? 'Memperbarui...' : `Auto: ${countdownSeconds}s`}</span>
+                              </span>
+                            )}
+                            {mikrotikTestResult.realtimeSource !== 'manual_correction' && (
+                              <button
+                                type="button"
+                                onClick={() => handleTestMikrotik()}
+                                disabled={isTestingMikrotik || isAutoRefreshing}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[11px] flex items-center gap-1 shadow-2xs transition disabled:opacity-50"
+                                title="Ambil data real-time terbaru langsung dari router MikroTik"
+                              >
+                                <RefreshCw className={`w-3 h-3 ${isTestingMikrotik || isAutoRefreshing ? 'animate-spin' : ''}`} />
+                                <span>{isTestingMikrotik || isAutoRefreshing ? 'Menyinkronkan...' : 'Segarkan Real-time'}</span>
+                              </button>
+                            )}
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold">
+                              {mikrotikTestResult.realtimeSource === 'manual_correction' ? (
+                                <span className="bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">✏️ Input Manual</span>
+                              ) : mikrotikTestResult.realtimeSource === 'terminal_import' ? (
+                                <span className="bg-purple-200 text-purple-900 px-2 py-0.5 rounded-full">📋 Terminal Winbox</span>
+                              ) : mikrotikTestResult.realtimeSource === 'routeros_rest' ? (
+                                <span className="bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-full hidden sm:inline-block">🌐 REST API</span>
+                              ) : (
+                                <span className="bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-full hidden sm:inline-block">⚡ Socket API</span>
+                              )}
+                            </span>
+                          </div>
                         </div>
 
+                        {/* Notice & Discrepancy Correction Banner */}
+                        <div className="p-2.5 rounded-xl bg-amber-50/90 border border-amber-200/80 text-amber-950 space-y-1.5 shadow-2xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 font-bold text-[11px] text-amber-900">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>Data ini tidak sesuai dengan router MikroTik Anda?</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setIsManualEditActive(!isManualEditActive)}
+                              className="px-2.5 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] flex items-center gap-1 transition shadow-2xs"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>{isManualEditActive ? 'Tutup Form' : 'Koreksi Angka Manual'}</span>
+                            </button>
+                          </div>
+                          <p className="text-[10.5px] text-amber-800 leading-relaxed">
+                            Data saat ini mungkin berasal dari router contoh (ACO CCR2004) atau profil sebelumnya. Anda dapat <b>mengoreksi langsung jumlah user non-isolir (yang ditagih)</b> sesuai router Anda, atau mereset data router ini:
+                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setIsManualEditActive(true)}
+                              className="px-2 py-1 rounded-lg bg-white border border-amber-300 text-amber-900 font-semibold text-[10px] hover:bg-amber-100 flex items-center gap-1 transition shadow-2xs"
+                            >
+                              <Edit3 className="w-3 h-3 text-amber-700" />
+                              <span>Koreksi Sesi & Tagihan</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMikrotikTab('terminal')}
+                              className="px-2 py-1 rounded-lg bg-white border border-indigo-200 text-indigo-800 font-semibold text-[10px] hover:bg-indigo-50 flex items-center gap-1 transition shadow-2xs"
+                            >
+                              <Terminal className="w-3 h-3 text-indigo-600" />
+                              <span>Impor via Terminal Winbox</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleClearMikrotikData}
+                              className="px-2 py-1 rounded-lg bg-white border border-rose-200 text-rose-700 font-semibold text-[10px] hover:bg-rose-50 flex items-center gap-1 transition shadow-2xs ml-auto"
+                            >
+                              <Trash2 className="w-3 h-3 text-rose-500" />
+                              <span>Reset / Ganti Router Saya</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Interactive Manual Correction Drawer/Card */}
+                        {isManualEditActive && (
+                          <div className="p-3 rounded-xl bg-white border-2 border-amber-300 shadow-md space-y-2.5 animate-in slide-in-from-top-1">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                              <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                                <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Koreksi Angka Manual Sesuai MikroTik Anda</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setIsManualEditActive(false)}
+                                className="text-slate-400 hover:text-slate-600 p-0.5"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <div>
+                                <label className="text-[10px] text-slate-600 block font-bold mb-0.5">
+                                  Sesi Aktif Total:
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={manualActiveCount}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    setManualActiveCount(val);
+                                    if (typeof val === 'number') {
+                                      const currentIso = typeof manualIsolirCount === 'number' ? manualIsolirCount : 0;
+                                      setManualNonIsolirCount(Math.max(0, val - currentIso));
+                                    }
+                                  }}
+                                  className="w-full px-2 py-1.5 rounded-lg border border-slate-300 font-mono text-xs font-bold text-slate-900 bg-slate-50 focus:bg-white focus:ring-1 focus:ring-amber-500"
+                                  placeholder="Contoh: 85"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] text-emerald-800 block font-bold mb-0.5">
+                                  Non-Isolir (Ditagih):
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={manualNonIsolirCount}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    setManualNonIsolirCount(val);
+                                  }}
+                                  className="w-full px-2 py-1.5 rounded-lg border border-emerald-300 font-mono text-xs font-black text-emerald-800 bg-emerald-50 focus:bg-white focus:ring-1 focus:ring-emerald-500"
+                                  placeholder="Contoh: 80"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] text-slate-600 block font-bold mb-0.5">
+                                  Isolir (Dikecualikan):
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={manualIsolirCount}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0);
+                                    setManualIsolirCount(val);
+                                    if (typeof val === 'number' && typeof manualActiveCount === 'number') {
+                                      setManualNonIsolirCount(Math.max(0, manualActiveCount - val));
+                                    }
+                                  }}
+                                  className="w-full px-2 py-1.5 rounded-lg border border-slate-300 font-mono text-xs font-bold text-slate-800 bg-slate-50 focus:bg-white focus:ring-1 focus:ring-amber-500"
+                                  placeholder="Contoh: 5"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] text-slate-600 block font-bold mb-0.5">
+                                  Identitas Router:
+                                </label>
+                                <input
+                                  type="text"
+                                  value={manualRouterIdentity}
+                                  onChange={(e) => setManualRouterIdentity(e.target.value)}
+                                  className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-slate-50 focus:bg-white focus:ring-1 focus:ring-amber-500"
+                                  placeholder="Nama Router Anda"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const act = typeof manualActiveCount === 'number' ? manualActiveCount : 0;
+                                  const iso = typeof manualIsolirCount === 'number' ? manualIsolirCount : 0;
+                                  setManualNonIsolirCount(Math.max(0, act - iso));
+                                }}
+                                className="text-[10.5px] text-slate-600 hover:text-slate-800 underline flex items-center gap-1"
+                              >
+                                Auto Hitung: Non-Isolir = Total ({manualActiveCount || 0}) - Isolir ({manualIsolirCount || 0})
+                              </button>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setIsManualEditActive(false)}
+                                  className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-medium"
+                                >
+                                  Batal
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleApplyManualCorrection}
+                                  className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs flex items-center gap-1.5"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Terapkan Angka Ini</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Hardware Telemetry Row */}
+                        {(mikrotikTestResult.cpuLoad !== undefined || mikrotikTestResult.freeMemory || mikrotikTestResult.uptime || mikrotikTestResult.totalPppoeSecrets) && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px] font-mono">
+                            {mikrotikTestResult.uptime && (
+                              <span className="px-2 py-0.5 rounded-md bg-white/90 text-slate-600 border border-slate-200/80">
+                                Uptime: <b className="text-slate-800">{mikrotikTestResult.uptime}</b>
+                              </span>
+                            )}
+                            {mikrotikTestResult.cpuLoad !== undefined && (
+                              <span className="px-2 py-0.5 rounded-md bg-white/90 text-slate-600 border border-slate-200/80 flex items-center gap-1">
+                                <Cpu className="w-3 h-3 text-indigo-600" />
+                                <span>CPU: <b className="text-indigo-800">{mikrotikTestResult.cpuLoad}%</b></span>
+                              </span>
+                            )}
+                            {mikrotikTestResult.freeMemory && (
+                              <span className="px-2 py-0.5 rounded-md bg-white/90 text-slate-600 border border-slate-200/80 flex items-center gap-1">
+                                <Server className="w-3 h-3 text-cyan-600" />
+                                <span>RAM: <b className="text-cyan-800">{mikrotikTestResult.freeMemory}</b></span>
+                              </span>
+                            )}
+                            {mikrotikTestResult.totalPppoeSecrets !== undefined && (
+                              <span className="px-2 py-0.5 rounded-md bg-white/90 text-slate-600 border border-slate-200/80">
+                                Total Secrets: <b className="text-indigo-800">{mikrotikTestResult.totalPppoeSecrets} Akun</b>
+                              </span>
+                            )}
+                            {mikrotikTestResult.lastSyncedAt && (
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-100/70 text-emerald-800 border border-emerald-200">
+                                Update: {new Date(mikrotikTestResult.lastSyncedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                            )}
+                            {mikrotikTestResult.hotspotActiveCount !== undefined && mikrotikTestResult.hotspotActiveCount > 0 && (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                                Hotspot: {mikrotikTestResult.hotspotActiveCount} Aktif
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-3 gap-2 pt-1">
-                          <div className="bg-white/80 p-2 rounded-xl text-center">
-                            <span className="text-[10px] text-slate-500 block uppercase">Total PPPoE</span>
-                            <span className="text-sm font-black text-slate-900 font-mono">
+                          <div 
+                            onClick={() => setIsManualEditActive(true)}
+                            className="bg-white/90 p-2.5 rounded-xl text-center shadow-2xs border border-slate-100 hover:border-amber-300 cursor-pointer transition relative group"
+                            title="Klik untuk ubah angka"
+                          >
+                            <span className="text-[10px] text-slate-500 block uppercase font-medium">Sesi PPPoE Aktif</span>
+                            <span className="text-base font-black text-slate-900 font-mono">
                               {mikrotikTestResult.activePppoeCount ?? 0}
                             </span>
+                            <Edit3 className="w-2.5 h-2.5 text-slate-400 group-hover:text-amber-600 absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition" />
                           </div>
 
-                          <div className="bg-emerald-100/70 p-2 rounded-xl text-center border border-emerald-300">
-                            <span className="text-[10px] text-emerald-800 font-bold block uppercase">Non-Isolir</span>
-                            <span className="text-sm font-black text-emerald-900 font-mono">
+                          <div 
+                            onClick={() => setIsManualEditActive(true)}
+                            className="bg-emerald-100/90 p-2.5 rounded-xl text-center border border-emerald-300 shadow-2xs hover:border-emerald-500 cursor-pointer transition relative group"
+                            title="Klik untuk ubah angka non-isolir"
+                          >
+                            <span className="text-[10px] text-emerald-800 font-bold block uppercase">Non-Isolir (Ditagih)</span>
+                            <span className="text-base font-black text-emerald-900 font-mono">
                               {mikrotikTestResult.nonIsolirCount ?? 0}
                             </span>
+                            <Edit3 className="w-2.5 h-2.5 text-emerald-600 group-hover:text-emerald-800 absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition" />
                           </div>
 
-                          <div className="bg-white/80 p-2 rounded-xl text-center">
-                            <span className="text-[10px] text-slate-500 block uppercase">Isolir</span>
-                            <span className="text-sm font-black text-slate-700 font-mono">
+                          <div 
+                            onClick={() => setIsManualEditActive(true)}
+                            className="bg-white/90 p-2.5 rounded-xl text-center shadow-2xs border border-slate-100 hover:border-amber-300 cursor-pointer transition relative group"
+                            title="Klik untuk ubah angka isolir"
+                          >
+                            <span className="text-[10px] text-slate-500 block uppercase font-medium">Isolir (Dikecualikan)</span>
+                            <span className="text-base font-black text-slate-700 font-mono">
                               {mikrotikTestResult.isolirCount ?? 0}
                             </span>
+                            <Edit3 className="w-2.5 h-2.5 text-slate-400 group-hover:text-amber-600 absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition" />
                           </div>
                         </div>
 
                         <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between">
                           <span className="text-[11px] text-slate-600">
-                            Estimasi Tagihan ({mikrotikTestResult.nonIsolirCount ?? 0} × {formatRupiah(mikrotikRate)}):
+                            Estimasi Tagihan ({mikrotikTestResult.nonIsolirCount ?? 0} user × {formatRupiah(mikrotikRate)}):
                           </span>
                           <span className="text-sm font-black text-emerald-800 font-mono">
                             {formatRupiah((mikrotikTestResult.nonIsolirCount ?? 0) * mikrotikRate)}
                           </span>
                         </div>
+
+                        {/* Button to view list of detected real users */}
+                        {mikrotikTestResult.activeUsersList && mikrotikTestResult.activeUsersList.length > 0 && (
+                          <div className="pt-2 border-t border-emerald-200/60">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewTestUsers(!previewTestUsers)}
+                              className="w-full py-1.5 rounded-xl bg-white/80 hover:bg-white text-emerald-800 font-bold text-xs border border-emerald-300 transition flex items-center justify-center gap-1.5"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>
+                                {previewTestUsers 
+                                  ? 'Sembunyikan Rincian Sesi' 
+                                  : `Lihat Rincian Sesi Terdeteksi (${mikrotikTestResult.activeUsersList.length} User)`
+                                }
+                              </span>
+                            </button>
+
+                            {previewTestUsers && (
+                              <div className="mt-2 p-2 rounded-xl bg-white border border-emerald-200 max-h-56 overflow-y-auto divide-y divide-slate-100 text-[11px]">
+                                {mikrotikTestResult.activeUsersList.map((u: any, uIdx: number) => (
+                                  <div key={uIdx} className="py-2 flex items-center justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <span className="font-bold text-slate-800 font-mono truncate block">{u.name}</span>
+                                      <span className="text-[10px] text-slate-400 block font-mono truncate">
+                                        IP: {u.address || '-'} • Profile: {u.profile || '-'} • Up: {u.uptime || '-'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                                        u.isIsolir ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                                      }`}>
+                                        {u.isIsolir ? 'Isolir' : 'Non-Isolir'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleKickUser(u.name || u.id)}
+                                        disabled={kickingUser === (u.name || u.id)}
+                                        className="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[9.5px] font-bold flex items-center gap-1 transition disabled:opacity-50"
+                                        title="Putuskan sesi ini langsung dari MikroTik"
+                                      >
+                                        <UserX className="w-3 h-3 text-rose-600" />
+                                        <span>{kickingUser === (u.name || u.id) ? '...' : 'Putuskan'}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Pilihan Metode Perhitungan Tagihan PPPoE */}

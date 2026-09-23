@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Printer, 
@@ -16,13 +16,19 @@ import {
   Clock, 
   FileSpreadsheet, 
   Send,
-  ExternalLink
+  ExternalLink,
+  RefreshCw,
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
-import { Invoice } from '../types';
+import { Invoice, BusinessSettings } from '../types';
 import { formatRupiah, formatDateIndo, formatDateTimeIndo, getStatusDetails, getPaymentMethodDetails } from '../utils/formatters';
+import { parseQrisClient, renderQrCodeDataUrl, convertStaticToDynamicQris, CANONICAL_DANA_STATIC_QRIS } from '../utils/qrisClient';
 
 interface InvoiceDetailModalProps {
   invoice: Invoice | null;
+  settings?: BusinessSettings | null;
+  onInvoiceUpdated?: (invoice: Invoice) => void;
   onClose: () => void;
   onOpenPaymentModal: (invoice: Invoice) => void;
   onPrintInvoice: (invoice: Invoice) => void;
@@ -33,6 +39,8 @@ interface InvoiceDetailModalProps {
 
 export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   invoice,
+  settings,
+  onInvoiceUpdated,
   onClose,
   onOpenPaymentModal,
   onPrintInvoice,
@@ -41,6 +49,36 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   onOpenPortal,
 }) => {
   const [copiedQris, setCopiedQris] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [fallbackQrUrl, setFallbackQrUrl] = useState<string | null>(null);
+
+  // Parse QRIS info to display merchant and dynamic status
+  const parsedQris = invoice?.dynamicQris ? parseQrisClient(invoice.dynamicQris) : null;
+  const merchantName = parsedQris?.merchantName || settings?.qrisMerchantName || 'hendr.store';
+  const merchantCity = parsedQris?.merchantCity || settings?.qrisMerchantCity || 'Kab. Pemalang';
+
+  // Ensure QR Code URL is always available
+  useEffect(() => {
+    if (!invoice) return;
+    if (invoice.dynamicQrisDataUrl) {
+      setFallbackQrUrl(invoice.dynamicQrisDataUrl);
+      return;
+    }
+
+    // Generate on client if missing
+    const staticSource = invoice.staticQris || settings?.defaultStaticQris || CANONICAL_DANA_STATIC_QRIS;
+    const dynamicStr = convertStaticToDynamicQris(
+      staticSource,
+      invoice.totalAmount,
+      invoice.invoiceNumber,
+      merchantName,
+      merchantCity
+    );
+    renderQrCodeDataUrl(dynamicStr).then((url) => {
+      setFallbackQrUrl(url);
+    }).catch(console.error);
+  }, [invoice?.id, invoice?.dynamicQrisDataUrl, invoice?.totalAmount, invoice?.staticQris, merchantName, merchantCity]);
 
   if (!invoice) return null;
 
@@ -57,13 +95,44 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
   };
 
   const handleDownloadQr = () => {
-    if (!invoice.dynamicQrisDataUrl) return;
+    const qrUrl = invoice.dynamicQrisDataUrl || fallbackQrUrl;
+    if (!qrUrl) return;
     const link = document.createElement('a');
-    link.href = invoice.dynamicQrisDataUrl;
+    link.href = qrUrl;
     link.download = `QRIS_${invoice.invoiceNumber}_Rp${invoice.totalAmount}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleRegenerateFromSettings = async () => {
+    setIsRegenerating(true);
+    setFeedbackMsg('');
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/regenerate-qris`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staticQris: settings?.defaultStaticQris,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Gagal memperbarui QRIS');
+
+      if (data.invoice && onInvoiceUpdated) {
+        onInvoiceUpdated(data.invoice);
+      }
+      if (data.dynamicQrisDataUrl) {
+        setFallbackQrUrl(data.dynamicQrisDataUrl);
+      }
+      setFeedbackMsg('QRIS Dinamis berhasil diperbarui dari QRIS DANA Bisnis!');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+    } catch (err: any) {
+      setFeedbackMsg(err.message || 'Gagal sinkronisasi QRIS');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   return (
@@ -163,36 +232,60 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
             <div className="flex flex-col sm:flex-row items-center gap-6">
               {/* QR Image */}
               <div className="bg-white p-3 rounded-2xl shadow-md border border-slate-100 shrink-0 text-center">
-                {invoice.dynamicQrisDataUrl ? (
+                {invoice.dynamicQrisDataUrl || fallbackQrUrl ? (
                   <img
-                    src={invoice.dynamicQrisDataUrl}
+                    src={invoice.dynamicQrisDataUrl || fallbackQrUrl || ''}
                     alt="QRIS Dinamis Otomatis"
                     className="w-44 h-44 object-contain mx-auto"
                   />
                 ) : (
-                  <div className="w-44 h-44 flex items-center justify-center text-slate-400">
-                    Membuat QRIS...
+                  <div className="w-44 h-44 flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
+                    <span className="text-xs font-medium">Membuat QRIS Dinamis...</span>
                   </div>
                 )}
-                <div className="mt-2 text-[10px] font-bold text-slate-500 tracking-wider uppercase">
+                <div className="mt-2 text-[10px] font-black text-blue-700 tracking-wider uppercase">
                   DANA BISNIS • QRIS DINAMIS
+                </div>
+                <div className="text-xs font-bold text-slate-800">
+                  {merchantName}
+                </div>
+                <div className="text-[10px] text-slate-500 font-medium">
+                  {merchantCity}
+                </div>
+                <div className="mt-1">
+                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-semibold">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" /> Tagihan Terkunci
+                  </span>
                 </div>
               </div>
 
               {/* QR Info & Actions */}
               <div className="space-y-2.5 text-center sm:text-left flex-1">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>Nominal Otomatis Terkunci: {formatRupiah(invoice.totalAmount)}</span>
+                <div className="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>Nominal Terkunci: {formatRupiah(invoice.totalAmount)}</span>
+                  </div>
+                  <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-medium">
+                    <span>Ref: <strong>{invoice.invoiceNumber}</strong></span>
+                  </div>
                 </div>
 
                 <h4 className="text-base font-extrabold text-slate-900">
-                  Scan QRIS untuk Pembayaran Instan
+                  Scan QRIS DANA Bisnis untuk Tagihan Ini
                 </h4>
 
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Pelanggan cukup membuka aplikasi perbankan atau e-wallet (DANA, BCA Mobile, GoPay, OVO, ShopeePay, Livin&apos;, dll). Nominal <span className="font-bold text-slate-900">{formatRupiah(invoice.totalAmount)}</span> akan otomatis muncul di layar tanpa perlu input manual!
+                  QRIS ini di-generate otomatis dari QRIS Statis DANA Bisnis pada menu Pengaturan, dan telah dikonversi menjadi <strong>QRIS Dinamis</strong> sesuai nominal tagihan <span className="font-bold text-slate-900">{formatRupiah(invoice.totalAmount)}</span>. Pelanggan cukup scan dengan aplikasi apapun (DANA, BCA, Mandiri, GoPay, ShopeePay, dll) tanpa perlu mengetik nominal lagi.
                 </p>
+
+                {feedbackMsg && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{feedbackMsg}</span>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                   <button
@@ -209,6 +302,16 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Download QR PNG</span>
+                  </button>
+
+                  <button
+                    onClick={handleRegenerateFromSettings}
+                    disabled={isRegenerating}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 shadow-2xs transition active:scale-95 disabled:opacity-60"
+                    title="Generate ulang QRIS Dinamis menggunakan QRIS Statis DANA Bisnis dari Pengaturan"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
+                    <span>{isRegenerating ? 'Menyinkronkan...' : 'Perbarui dari QRIS Pengaturan'}</span>
                   </button>
                 </div>
               </div>

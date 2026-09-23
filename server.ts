@@ -2,10 +2,11 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes';
+import { initDailyTelegramBackupScheduler } from './server/telegram';
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = 3000;
 
   // Middleware for body parsing
   app.use(express.json({ limit: '10mb' }));
@@ -40,6 +41,8 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`InvoiceKilat Server running at http://0.0.0.0:${PORT}`);
+    // Boot daily automated Telegram backup scheduler
+    initDailyTelegramBackupScheduler();
   });
 }
 

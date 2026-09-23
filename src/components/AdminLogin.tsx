@@ -9,8 +9,7 @@ import {
   AlertCircle, 
   KeyRound, 
   QrCode,
-  ExternalLink,
-  CheckCircle2
+  ExternalLink
 } from 'lucide-react';
 import { AdminUser } from '../types';
 
@@ -74,12 +73,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleQuickLogin = (userVal: string, passVal: string) => {
-    setUsername(userVal);
-    setPassword(passVal);
-    setErrorMessage('');
   };
 
   return (
@@ -198,58 +191,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               )}
             </button>
           </form>
-
-          {/* Quick Demo Autofill Box */}
-          <div className="mt-6 pt-5 border-t border-slate-100 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Akun Demo Pengujian:
-              </span>
-              <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                Siap Pakai
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin', 'admin123')}
-                className="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-blue-300 bg-slate-50/70 hover:bg-blue-50/40 transition group flex items-center justify-between"
-              >
-                <div>
-                  <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Akun Utama: <code>admin</code></span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Password: <code className="bg-slate-200/80 px-1 rounded text-slate-700">admin123</code>
-                  </div>
-                </div>
-                <span className="text-[10px] font-extrabold text-blue-600 bg-blue-100/80 px-2 py-1 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition">
-                  Gunakan
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('heruu2004@gmail.com', 'admin123')}
-                className="w-full text-left p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50/70 hover:bg-indigo-50/40 transition group flex items-center justify-between"
-              >
-                <div>
-                  <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Email Pengelola: <code>heruu2004@gmail.com</code></span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Password: <code className="bg-slate-200/80 px-1 rounded text-slate-700">admin123</code>
-                  </div>
-                </div>
-                <span className="text-[10px] font-extrabold text-indigo-600 bg-indigo-100/80 px-2 py-1 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition">
-                  Gunakan
-                </span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Link to Customer Portal (if client lands here) */}

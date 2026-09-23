@@ -1,76 +1,149 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RealtimeEvent } from '../types';
-import { CheckCircle, AlertTriangle, FileText, Share2, X } from 'lucide-react';
+import { CheckCircle, AlertTriangle, FileText, Share2, X, BellOff, Volume2, VolumeX } from 'lucide-react';
 import { formatRupiah } from '../utils/formatters';
 
 interface NotificationToastProps {
   event: RealtimeEvent | null;
   onClose: () => void;
   onSelectInvoice?: (id: string) => void;
+  onMuteToasts?: () => void;
 }
 
 export const NotificationToast: React.FC<NotificationToastProps> = ({
   event,
   onClose,
   onSelectInvoice,
+  onMuteToasts,
 }) => {
+  const [isPaused, setIsPaused] = useState(false);
+  const [progress, setProgress] = useState(100);
+  const duration = 5000; // 5 seconds auto-dismiss
+  const intervalStep = 50;
+
+  useEffect(() => {
+    if (!event) return;
+    setProgress(100);
+  }, [event]);
+
+  useEffect(() => {
+    if (!event || isPaused) return;
+
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        if (prev <= 0) {
+          clearInterval(timer);
+          onClose();
+          return 0;
+        }
+        return prev - (intervalStep / duration) * 100;
+      });
+    }, intervalStep);
+
+    return () => clearInterval(timer);
+  }, [event, isPaused, onClose]);
+
   if (!event) return null;
 
   const isPayment = event.type === 'payment_received';
   const isReminder = event.type === 'reminder_dispatched';
 
+  const handleMute = () => {
+    try {
+      localStorage.setItem('notification_toasts_muted', 'true');
+    } catch {}
+    if (onMuteToasts) {
+      onMuteToasts();
+    }
+    onClose();
+  };
+
   return (
-    <div
+    <aside
       id="realtime-toast"
-      className="fixed top-20 right-4 z-50 max-w-sm w-full animate-in slide-in-from-top-4 fade-in duration-300"
+      aria-label="Notifikasi Real-Time"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
+      className="fixed bottom-4 sm:bottom-auto sm:top-20 right-3 sm:right-5 left-3 sm:left-auto z-50 max-w-sm sm:w-88 w-auto mx-auto sm:mx-0 transition-all duration-300 animate-in slide-in-from-bottom-3 sm:slide-in-from-top-3 fade-in"
     >
-      <div className={`p-4 rounded-2xl shadow-2xl border ${
-        isPayment 
-          ? 'bg-emerald-900/95 text-white border-emerald-500/50 backdrop-blur-md' 
-          : isReminder
-          ? 'bg-amber-900/95 text-white border-amber-500/50 backdrop-blur-md'
-          : 'bg-slate-900/95 text-white border-slate-700/50 backdrop-blur-md'
-      }`}>
-        <div className="flex items-start gap-3">
-          <div className={`p-2 rounded-xl shrink-0 ${
-            isPayment ? 'bg-emerald-500/20 text-emerald-300' : isReminder ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300'
-          }`}>
+      <div
+        className={`relative overflow-hidden rounded-2xl shadow-xl border backdrop-blur-md p-3.5 sm:p-4 text-white ${
+          isPayment
+            ? 'bg-slate-900/95 border-emerald-500/40 shadow-emerald-950/20'
+            : isReminder
+            ? 'bg-slate-900/95 border-amber-500/40 shadow-amber-950/20'
+            : 'bg-slate-900/95 border-slate-700/60 shadow-slate-950/30'
+        }`}
+      >
+        <div className="flex items-start gap-2.5 sm:gap-3">
+          {/* Icon Badge */}
+          <div
+            className={`p-2 rounded-xl shrink-0 ${
+              isPayment
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : isReminder
+                ? 'bg-amber-500/20 text-amber-400'
+                : 'bg-blue-500/20 text-blue-400'
+            }`}
+          >
             {isPayment ? (
-              <CheckCircle className="w-5 h-5 animate-bounce" />
+              <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
             ) : isReminder ? (
-              <AlertTriangle className="w-5 h-5" />
+              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5" />
             ) : (
-              <FileText className="w-5 h-5" />
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
             )}
           </div>
 
-          <div className="flex-1 min-w-0 pr-2">
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className={`text-[11px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full ${
-                isPayment ? 'bg-emerald-500/30 text-emerald-200' : 'bg-slate-700 text-slate-300'
-              }`}>
-                {isPayment ? '⚡ Pembayaran Real-Time' : isReminder ? '🔔 Pengingat Otomatis' : '📢 Notifikasi'}
+          {/* Content */}
+          <div className="flex-1 min-w-0 pr-1">
+            <div className="flex items-center justify-between gap-1 mb-1">
+              <span
+                className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-md ${
+                  isPayment
+                    ? 'bg-emerald-500/20 text-emerald-300'
+                    : isReminder
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                {isPayment ? 'Pembayaran Masuk' : isReminder ? 'Pengingat Tagihan' : 'Info Sistem'}
               </span>
+
+              {/* Mute popups button */}
+              <button
+                type="button"
+                onClick={handleMute}
+                className="text-[10px] text-slate-400 hover:text-slate-200 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-800 transition"
+                title="Heningkan notifikasi mengambang (tetap tersimpan di lonceng)"
+              >
+                <BellOff className="w-3 h-3" />
+                <span className="hidden sm:inline">Heningkan</span>
+              </button>
             </div>
 
-            <p className="text-sm font-semibold leading-snug">
+            <p className="text-xs sm:text-sm font-semibold leading-snug line-clamp-2 text-slate-100">
               {event.message}
             </p>
 
             {isPayment && event.amount && (
-              <p className="text-xs text-emerald-200/90 mt-1 font-mono font-medium">
-                Nominal: {formatRupiah(event.amount)}
+              <p className="text-xs text-emerald-300 mt-1 font-mono font-bold">
+                {formatRupiah(event.amount)}
               </p>
             )}
 
-            <div className="mt-3 flex items-center gap-2">
+            {/* Actions row */}
+            <div className="mt-2.5 flex items-center gap-2">
               {event.invoiceId && onSelectInvoice && (
                 <button
+                  type="button"
                   onClick={() => {
                     onSelectInvoice(event.invoiceId!);
                     onClose();
                   }}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white/20 hover:bg-white/30 text-white transition active:scale-95"
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition active:scale-95 shadow-2xs"
                 >
                   Buka Invoice
                 </button>
@@ -82,7 +155,7 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={onClose}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1 transition active:scale-95"
+                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 transition active:scale-95 shadow-2xs"
                 >
                   <Share2 className="w-3 h-3" />
                   Kirim WA
@@ -91,14 +164,28 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
             </div>
           </div>
 
+          {/* Close button */}
           <button
+            type="button"
             onClick={onClose}
-            className="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 transition"
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition shrink-0"
+            title="Tutup Notifikasi"
+            aria-label="Tutup"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Subtle animated auto-dismiss progress bar */}
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-800">
+          <div
+            className={`h-full transition-all ease-linear ${
+              isPayment ? 'bg-emerald-400' : isReminder ? 'bg-amber-400' : 'bg-blue-400'
+            }`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
       </div>
-    </div>
+    </aside>
   );
 };

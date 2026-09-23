@@ -17,9 +17,9 @@ import { convertToDynamicQris, generateQrDataUrl } from './qris';
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-// Default Real-World Dana Bisnis Static QRIS Template
+// Default Real-World Dana Bisnis Static QRIS Template (Standard Bank Indonesia EMVCo TLV)
 export const DEFAULT_DANA_STATIC_QRIS = 
-  '00020101021126590014ID.DANA.WWW0118936009153000000001021000000000000303UMI51440014ID.CO.QRIS.WWW0215ID10200210000010303UMI5204541153033605802ID5914DANA BISNIS MER59146007JAKARTA6105123406304ABCD';
+  '00020101021126570011ID.DANA.WWW011893600915356761342102095676134210303UMI51440014ID.CO.QRIS.WWW0215ID10233067778720303UMI5204737253033605802ID5911hendr.store6013Kab. Pemalang6105523716304F609';
 
 export interface DatabaseSchema {
   settings: BusinessSettings;
@@ -113,8 +113,8 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   defaultInvoiceTemplate: 'corporate',
 
   defaultStaticQris: DEFAULT_DANA_STATIC_QRIS,
-  qrisMerchantName: 'DANA BISNIS CIPTA MEDIA',
-  qrisMerchantCity: 'JAKARTA',
+  qrisMerchantName: 'hendr.store',
+  qrisMerchantCity: 'Kab. Pemalang',
 
   googleSheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
   googleSheetName: 'InvoiceKilat_Master_Backup',
@@ -136,6 +136,16 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
     'Pemberitahuan: Invoice {{invoice_number}} atas nama {{customer_name}} senilai Rp {{amount}} telah MELEWATI JATUH TEMPO (Due Date: {{due_date}}). Mohon segera melakukan pembayaran melalui QRIS Dinamis pada link berikut: {{invoice_url}}',
   preDueEmailTemplate: 
     'Pengingat Pembayaran: Invoice {{invoice_number}} senilai Rp {{amount}} akan jatuh tempo pada {{due_date}}. Segera lakukan pembayaran untuk menghindari denda.',
+
+  // Telegram Backup Harian & Notifikasi
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
+  telegramDailyBackupEnabled: false,
+  telegramDailyBackupTime: '00:00',
+  telegramIncludeFormat: 'both',
+  lastTelegramBackupAt: '',
+  lastTelegramBackupStatus: 'idle',
+  lastTelegramBackupMessage: '',
 };
 
 const DEFAULT_SERVICES: ServiceItem[] = [
@@ -286,42 +296,53 @@ export const DEFAULT_RECURRING_ADDONS: RecurringAddonService[] = [
 const DEFAULT_CUSTOMERS: CustomerRecord[] = [
   {
     id: 'cust-noc-1',
-    name: 'Heru Pratama (ISP NetNusantara)',
-    company: 'PT Net Nusantara Fiber',
-    email: 'noc@netnusantara.net.id',
+    name: 'Heru Pratama (Fiberku.net / ACO)',
+    company: 'PT Net Nusantara Fiber (fiberku.net)',
+    email: 'noc@fiberku.net',
     phone: '6281299887766',
     address: 'Gedung Cyber 1 Lt. 8, Jl. Kuningan Barat, Jakarta Selatan',
-    notes: 'Klien ISP RTRW Net Mitra - Kontrak Monitoring NOC & Pemeliharaan Mikrotik PPPoE',
+    notes: 'Klien ISP RTRW Net Mitra - Kontrak Monitoring NOC & Pemeliharaan Mikrotik PPPoE RouterOS Native',
     customerMode: 'noc',
     recurringEnabled: true,
     includeVpn: true,
     includeMonitoring: true,
     pppoeBillingMethod: 'monthly_average',
-    monthlyAveragePppoeCount: 92,
+    monthlyAveragePppoeCount: 135,
+    password: 'client123',
+    portalPin: '123456',
     mikrotik: {
-      routerName: 'CCR1009-Core-NetNusa',
-      host: '103.145.22.10',
-      port: 8728,
-      username: 'api-monitoring',
+      routerName: 'ACO (CCR2004-16G-2S+)',
+      host: 'id-6.hostddns.us',
+      port: 10941,
+      username: 'mikhmon',
+      password: 'rembulan',
       ratePerUser: 5000,
       isolirProfileName: 'isolir',
       connectionStatus: 'connected',
+      connectionType: 'api',
       lastSyncedAt: new Date().toISOString(),
-      totalPppoeSecrets: 125,
-      activePppoeCount: 96,
-      nonIsolirCount: 84,
-      isolirCount: 12,
-      systemIdentity: 'CCR1009-Core-NetNusa',
-      rosVersion: 'v7.15.3',
-      boardName: 'CCR1009-7G-1C-1S+',
-      uptime: '18w 4d 11h 45m',
+      totalPppoeSecrets: 138,
+      activePppoeCount: 135,
+      nonIsolirCount: 135,
+      isolirCount: 0,
+      hotspotActiveCount: 0,
+      hotspotUsersCount: 0,
+      systemIdentity: 'ACO',
+      rosVersion: '7.20.8 (long-term)',
+      boardName: 'CCR2004-16G-2S+',
+      uptime: '1d 13h 48m',
+      cpuLoad: 25,
+      freeMemory: '3620.0 MiB',
+      totalMemory: '4096.0 MiB',
+      freeHdd: '112.5 MB',
+      realtimeSource: 'routeros_api',
       samples: [
-        { timestamp: '2026-09-01T08:00:00Z', activeCount: 99, nonIsolirCount: 90, isolirCount: 9 },
-        { timestamp: '2026-09-07T12:00:00Z', activeCount: 104, nonIsolirCount: 94, isolirCount: 10 },
-        { timestamp: '2026-09-14T15:30:00Z', activeCount: 102, nonIsolirCount: 91, isolirCount: 11 },
-        { timestamp: '2026-09-19T20:00:00Z', activeCount: 105, nonIsolirCount: 93, isolirCount: 12 },
+        { timestamp: '2026-09-01T08:00:00Z', activeCount: 130, nonIsolirCount: 130, isolirCount: 0 },
+        { timestamp: '2026-09-07T12:00:00Z', activeCount: 132, nonIsolirCount: 132, isolirCount: 0 },
+        { timestamp: '2026-09-14T15:30:00Z', activeCount: 134, nonIsolirCount: 134, isolirCount: 0 },
+        { timestamp: '2026-09-20T07:55:44Z', activeCount: 135, nonIsolirCount: 135, isolirCount: 0 },
       ],
-      monthlyAverageNonIsolir: 92,
+      monthlyAverageNonIsolir: 135,
       preferredBillingMethod: 'monthly_average',
     },
     createdAt: new Date().toISOString(),
@@ -335,6 +356,8 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     address: 'Jl. Pemuda No. 12, Surabaya',
     notes: 'Klien prioritas jasa software dan integrasi pembayaran',
     customerMode: 'biasa',
+    password: 'client123',
+    portalPin: '123456',
     createdAt: new Date().toISOString(),
   },
   {
@@ -346,6 +369,8 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     address: 'Wisma Mandiri Lt. 14, Jakarta Selatan',
     notes: 'Kontrak sistem QRIS dan WhatsApp gateway',
     customerMode: 'biasa',
+    password: 'client123',
+    portalPin: '123456',
     createdAt: new Date().toISOString(),
   },
   {
@@ -357,6 +382,8 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     address: 'Jl. Riau No. 88, Bandung',
     notes: 'Langganan maintenance bulanan',
     customerMode: 'biasa',
+    password: 'client123',
+    portalPin: '123456',
     createdAt: new Date().toISOString(),
   },
   {
@@ -368,6 +395,8 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     address: 'Jl. Malioboro No. 40, Yogyakarta',
     notes: 'Klien UI/UX design system',
     customerMode: 'biasa',
+    password: 'client123',
+    portalPin: '123456',
     createdAt: new Date().toISOString(),
   },
 ];
@@ -466,8 +495,10 @@ export async function getDatabase(): Promise<DatabaseSchema> {
         }
       }
 
-      // Ensure NOC customer has samples and monthlyAverageNonIsolir initialized
+      // Ensure customers have portal password, pin, and NOC metrics initialized
       for (const cust of cachedDb!.customers) {
+        if (!cust.password) cust.password = 'client123';
+        if (!cust.portalPin) cust.portalPin = '123456';
         if (cust.customerMode === 'noc' && cust.mikrotik) {
           if (!cust.mikrotik.samples || cust.mikrotik.samples.length === 0) {
             cust.mikrotik.samples = [
@@ -518,6 +549,14 @@ export async function getDatabase(): Promise<DatabaseSchema> {
           showAppWatermark: cachedDb!.settings.showAppWatermark ?? true,
           appWatermarkPosition: cachedDb!.settings.appWatermarkPosition || 'bottom-bar',
           recurringBilling: cachedDb!.settings.recurringBilling || DEFAULT_SETTINGS.recurringBilling,
+          telegramBotToken: cachedDb!.settings.telegramBotToken !== undefined ? cachedDb!.settings.telegramBotToken : (DEFAULT_SETTINGS.telegramBotToken || ''),
+          telegramChatId: cachedDb!.settings.telegramChatId !== undefined ? cachedDb!.settings.telegramChatId : (DEFAULT_SETTINGS.telegramChatId || ''),
+          telegramDailyBackupEnabled: cachedDb!.settings.telegramDailyBackupEnabled ?? false,
+          telegramDailyBackupTime: cachedDb!.settings.telegramDailyBackupTime || '00:00',
+          telegramIncludeFormat: cachedDb!.settings.telegramIncludeFormat || 'both',
+          lastTelegramBackupAt: cachedDb!.settings.lastTelegramBackupAt || '',
+          lastTelegramBackupStatus: cachedDb!.settings.lastTelegramBackupStatus || 'idle',
+          lastTelegramBackupMessage: cachedDb!.settings.lastTelegramBackupMessage || '',
         };
       }
       saveDatabase(cachedDb!);
@@ -551,6 +590,30 @@ export function saveDatabase(db: DatabaseSchema) {
   const tempFile = `${DB_FILE}.tmp`;
   fs.writeFileSync(tempFile, JSON.stringify(db, null, 2), 'utf-8');
   fs.renameSync(tempFile, DB_FILE);
+}
+
+/**
+ * Creates an automatic timestamped snapshot of the current database before any restore or critical change
+ */
+export function createDatabaseBackupSnapshot(label: string = 'pre_restore'): string {
+  try {
+    ensureDataDir();
+    const backupDir = path.join(DATA_DIR, 'backups');
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupFile = path.join(backupDir, `db_snapshot_${label}_${timestamp}.json`);
+    if (fs.existsSync(DB_FILE)) {
+      fs.copyFileSync(DB_FILE, backupFile);
+    } else if (cachedDb) {
+      fs.writeFileSync(backupFile, JSON.stringify(cachedDb, null, 2), 'utf-8');
+    }
+    return backupFile;
+  } catch (err: any) {
+    console.warn('Failed to create database snapshot:', err.message);
+    return '';
+  }
 }
 
 async function createSeedInvoices(): Promise<Invoice[]> {

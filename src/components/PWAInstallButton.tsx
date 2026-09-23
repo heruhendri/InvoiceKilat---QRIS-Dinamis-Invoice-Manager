@@ -17,11 +17,12 @@ export const PWAInstallButton: React.FC = () => {
       <button
         id="pwa-install-btn"
         onClick={install}
-        className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-all"
+        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 p-2 sm:px-3 sm:py-1.5 text-xs font-semibold text-white shadow-2xs hover:from-blue-700 hover:to-indigo-700 active:scale-95 transition-all"
         title="Pasang aplikasi di HP atau Desktop"
+        aria-label="Install App"
       >
-        <Download className="w-3.5 h-3.5" />
-        <span>Install App</span>
+        <Download className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+        <span className="hidden md:inline">Install App</span>
       </button>
     );
   }
@@ -33,10 +34,12 @@ export const PWAInstallButton: React.FC = () => {
         <button
           id="pwa-install-ios-btn"
           onClick={() => setShowIOSGuide(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white p-2 sm:px-3 sm:py-1.5 text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 transition"
+          title="Pasang di iPhone / iPad"
+          aria-label="Pasang di iOS"
         >
-          <Smartphone className="w-3.5 h-3.5 text-blue-600" />
-          <span>Pasang di iOS</span>
+          <Smartphone className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-blue-600" />
+          <span className="hidden md:inline">Pasang di iOS</span>
         </button>
 
         {showIOSGuide && (

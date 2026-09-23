@@ -387,6 +387,9 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                         <QrCode className="w-3.5 h-3.5 text-blue-600" />
                         <span>Scan & Bayar via QRIS Dinamis</span>
                       </span>
+                      <p className="text-[11px] text-slate-700 font-semibold">
+                        Merchant: <strong>{settings?.qrisMerchantName || 'hendr.store'}</strong> ({settings?.qrisMerchantCity || 'Kab. Pemalang'})
+                      </p>
                       <p className="text-[11px] text-slate-500">
                         Nominal otomatis terkunci senilai <strong>{formatRupiah(invoice.totalAmount)}</strong>.
                       </p>
@@ -923,8 +926,9 @@ export const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
               {invoice.dynamicQrisDataUrl && !isPaid && (
                 <div className="flex flex-col items-center justify-center py-2 space-y-1">
                   <p className="text-[10px] font-bold text-slate-700">BAYAR VIA QRIS DINAMIS:</p>
+                  <p className="text-[9px] font-semibold text-slate-600">{settings?.qrisMerchantName || 'hendr.store'} • {settings?.qrisMerchantCity || 'Kab. Pemalang'}</p>
                   <img src={invoice.dynamicQrisDataUrl} alt="QRIS" className="w-32 h-32 object-contain bg-white p-1 border border-slate-300" />
-                  <p className="text-[9px] text-slate-400 text-center">Nominal otomatis terkunci</p>
+                  <p className="text-[9px] text-slate-500 text-center font-bold">Nominal Terkunci: {formatRupiah(invoice.totalAmount)}</p>
                 </div>
               )}
 

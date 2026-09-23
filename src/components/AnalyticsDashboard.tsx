@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -12,19 +12,9 @@ import {
   ChevronRight,
   Sparkles
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  AreaChart, 
-  Area, 
-  CartesianGrid 
-} from 'recharts';
-import { AnalyticsSummary, Invoice } from '../types';
+import { AnalyticsSummary, Invoice, PaymentTransaction } from '../types';
 import { formatRupiah, formatDateTimeIndo, formatDateIndo } from '../utils/formatters';
+import { RevenueBarChart } from './RevenueBarChart';
 
 interface AnalyticsDashboardProps {
   analytics: AnalyticsSummary | null;
@@ -33,7 +23,6 @@ interface AnalyticsDashboardProps {
   onOpenCreateInvoice: () => void;
   onTriggerCheckReminders: () => void;
   isCheckingReminders: boolean;
-  onOpenGallery?: () => void;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
@@ -43,8 +32,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   onOpenCreateInvoice,
   onTriggerCheckReminders,
   isCheckingReminders,
-  onOpenGallery,
 }) => {
+  const [selectedOverdueIdx, setSelectedOverdueIdx] = useState(0);
+
   if (!analytics) {
     return (
       <div className="flex items-center justify-center py-20 text-slate-500">
@@ -64,8 +54,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     liveTotalOverdueAmount,
     liveOverdueCount,
     liveTotalOutstanding,
+    livePendingAmount,
     livePendingCount,
     livePaidCount,
+    liveTotalInvoiceAmount,
+    liveTotalPaidAmount,
     liveTotalRevenueThisMonth,
     liveTotalRevenueToday,
     liveCollectionRate,
@@ -76,8 +69,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         liveTotalOverdueAmount: summary?.totalOverdueAmount ?? 0,
         liveOverdueCount: summary?.invoiceCounts?.overdue ?? 0,
         liveTotalOutstanding: summary?.totalOutstanding ?? 0,
+        livePendingAmount: 0,
         livePendingCount: summary?.invoiceCounts?.pending ?? 0,
         livePaidCount: summary?.invoiceCounts?.paid ?? 0,
+        liveTotalInvoiceAmount: 0,
+        liveTotalPaidAmount: summary?.totalRevenueAllTime ?? 0,
         liveTotalRevenueThisMonth: summary?.totalRevenueThisMonth ?? 0,
         liveTotalRevenueToday: summary?.totalRevenueToday ?? 0,
         liveCollectionRate: summary?.collectionRate ?? 0,
@@ -90,28 +86,37 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
     const overdueList: Invoice[] = [];
     let overdueAmt = 0;
+    let pendingAmt = 0;
     let outstandingAmt = 0;
     let pendingCnt = 0;
     let paidCnt = 0;
     let revMonth = 0;
     let revToday = 0;
+    let totalInvAmt = 0;
+    let totalPaidAmt = 0;
 
     for (const inv of invoices) {
-      const unpaid = Math.max(0, inv.totalAmount - (inv.paidAmount || 0));
+      const invTotal = inv.totalAmount || 0;
+      totalInvAmt += invTotal;
+
+      const paid = inv.paidAmount || (inv.status === 'paid' ? invTotal : 0) || 0;
+      totalPaidAmt += paid;
+
+      const unpaid = Math.max(0, invTotal - (inv.paidAmount || 0));
       const isOverdue = inv.status === 'overdue' || (unpaid > 0 && inv.dueDate < todayStr);
 
       if (isOverdue) {
         overdueList.push(inv);
         overdueAmt += unpaid;
+      } else if (inv.status !== 'paid' && unpaid > 0) {
+        pendingCnt++;
+        pendingAmt += unpaid;
       }
 
-      if (inv.status === 'paid') {
+      if (inv.status === 'paid' || (invTotal > 0 && unpaid === 0)) {
         paidCnt++;
       } else {
         outstandingAmt += unpaid;
-        if (!isOverdue) {
-          pendingCnt++;
-        }
       }
 
       // Track revenue from verified transactions or payments
@@ -125,13 +130,20 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             revMonth += trx.amount;
           }
         }
-      } else if (inv.status === 'paid' && inv.paidAmount > 0) {
-        const invDate = new Date(inv.date);
+      } else if ((inv.status === 'paid' || paid > 0) && paid > 0) {
+        const dateStr = inv.updatedAt || inv.date || todayStr;
+        const invDate = new Date(dateStr);
+        if (dateStr.startsWith(todayStr)) {
+          revToday += paid;
+        }
         if (invDate.getFullYear() === currentYear && invDate.getMonth() === currentMonth) {
-          revMonth += inv.paidAmount;
+          revMonth += paid;
         }
       }
     }
+
+    // Sort overdue by most urgent due date
+    overdueList.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
     const rate = invoices.length > 0 ? Math.round((paidCnt / invoices.length) * 100) : 0;
 
@@ -140,28 +152,81 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       liveTotalOverdueAmount: overdueAmt,
       liveOverdueCount: overdueList.length,
       liveTotalOutstanding: outstandingAmt,
+      livePendingAmount: pendingAmt,
       livePendingCount: pendingCnt,
       livePaidCount: paidCnt,
+      liveTotalInvoiceAmount: totalInvAmt,
+      liveTotalPaidAmount: totalPaidAmt,
       liveTotalRevenueThisMonth: revMonth > 0 ? revMonth : (summary?.totalRevenueThisMonth ?? 0),
       liveTotalRevenueToday: revToday,
       liveCollectionRate: rate,
     };
   }, [invoices, summary, todayStr]);
 
-  // Custom Tooltip for charts
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur-xs">
-          <p className="text-xs font-semibold text-slate-600">{label}</p>
-          <p className="text-sm font-bold text-blue-600">
-            {formatRupiah(payload[0].value)}
-          </p>
-        </div>
-      );
+  // Derive live real-time transactions directly from current active invoices
+  const liveTransactions = useMemo(() => {
+    const list: (PaymentTransaction & { customerName: string; invoiceNumber: string; invoiceId: string })[] = [];
+    
+    for (const inv of invoices) {
+      if (inv.transactions && inv.transactions.length > 0) {
+        for (const trx of inv.transactions) {
+          list.push({
+            ...trx,
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            customerName: inv.customer?.name || 'Pelanggan',
+          });
+        }
+      } else if (inv.status === 'paid' && (inv.paidAmount || inv.totalAmount) > 0) {
+        list.push({
+          id: `trx-paid-${inv.id}`,
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          amount: inv.paidAmount || inv.totalAmount,
+          paymentMethod: (inv.paymentMethod as any) || 'qris_dinamis',
+          referenceNumber: `AUTO-${inv.invoiceNumber}`,
+          notes: 'Pembayaran invoice terverifikasi lunas',
+          proofUrl: '',
+          verifiedAt: inv.updatedAt || inv.date || new Date().toISOString(),
+          verifiedBy: 'Sistem Pembayaran',
+          customerName: inv.customer?.name || 'Pelanggan',
+        });
+      } else if (inv.paidAmount && inv.paidAmount > 0) {
+        list.push({
+          id: `trx-partial-${inv.id}`,
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber,
+          amount: inv.paidAmount,
+          paymentMethod: (inv.paymentMethod as any) || 'qris_dinamis',
+          referenceNumber: `PARTIAL-${inv.invoiceNumber}`,
+          notes: 'Pembayaran sebagian terverifikasi',
+          proofUrl: '',
+          verifiedAt: inv.updatedAt || inv.date || new Date().toISOString(),
+          verifiedBy: 'Sistem Pembayaran',
+          customerName: inv.customer?.name || 'Pelanggan',
+        });
+      }
     }
-    return null;
-  };
+
+    // Merge or fallback with recentTransactions from analytics
+    if (recentTransactions && recentTransactions.length > 0) {
+      for (const rt of recentTransactions) {
+        const alreadyExists = list.some(t => t.id === rt.id || t.referenceNumber === rt.referenceNumber);
+        if (!alreadyExists) {
+          const matched = invoices.find(i => i.id === rt.invoiceId || i.invoiceNumber === rt.invoiceNumber || i.invoiceNumber === rt.invoiceId);
+          list.push({
+            ...rt,
+            invoiceId: matched ? matched.id : rt.invoiceId,
+            invoiceNumber: matched ? matched.invoiceNumber : rt.invoiceNumber,
+            customerName: matched ? matched.customer.name : (rt as any).customerName || 'Pelanggan',
+          });
+        }
+      }
+    }
+
+    list.sort((a, b) => new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime());
+    return list;
+  }, [invoices, recentTransactions]);
 
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-300">
@@ -182,19 +247,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          {onOpenGallery && (
-            <button
-              id="dash-open-gallery-btn"
-              onClick={onOpenGallery}
-              className="flex items-center gap-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 px-3.5 py-2.5 text-xs font-bold text-amber-200 transition active:scale-95"
-              title="Lihat screenshot tampilan fitur aplikasi"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>Screenshot Fitur</span>
-            </button>
-          )}
-
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             id="run-reminders-check-btn"
             onClick={onTriggerCheckReminders}
@@ -254,8 +307,15 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             <span className="text-2xl font-extrabold tracking-tight text-slate-900">
               {formatRupiah(liveTotalOutstanding)}
             </span>
-            <div className="mt-1 text-xs text-slate-500">
-              Menunggu pembayaran ({livePendingCount} invoice)
+            <div className="mt-1 flex flex-col gap-0.5 text-xs text-slate-600">
+              <div className="font-semibold text-amber-700">
+                {livePendingCount + liveOverdueCount} invoice belum lunas
+              </div>
+              <div className="text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                <span>{livePendingCount} berjalan ({formatRupiah(livePendingAmount)})</span>
+                <span>•</span>
+                <span className="text-rose-600 font-medium">{liveOverdueCount} tempo ({formatRupiah(liveTotalOverdueAmount)})</span>
+              </div>
             </div>
           </div>
         </div>
@@ -291,37 +351,71 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           </div>
 
           {/* Rincian invoice yang saat ini sedang overdue */}
-          {liveOverdueInvoices.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-rose-100/90 space-y-2">
-              <div className="bg-white/90 rounded-xl p-2.5 border border-rose-200/80 text-[11px] shadow-2xs">
-                <div className="flex items-center justify-between font-bold text-slate-900">
-                  <span className="text-rose-700 font-black">{liveOverdueInvoices[0].invoiceNumber}</span>
-                  <span className="text-rose-600 font-semibold text-[10px] bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200">
-                    Tempo: {formatDateIndo(liveOverdueInvoices[0].dueDate)}
+          {liveOverdueInvoices.length > 0 && (() => {
+            const currentInv = liveOverdueInvoices[selectedOverdueIdx] || liveOverdueInvoices[0];
+            const currentUnpaid = Math.max(0, currentInv.totalAmount - (currentInv.paidAmount || 0));
+            return (
+              <div className="mt-3 pt-3 border-t border-rose-100/90 space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mb-0.5">
+                  <span className="font-semibold text-rose-700">Daftar Tagihan Menunggak:</span>
+                  <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded">
+                    {selectedOverdueIdx + 1} dari {liveOverdueInvoices.length}
                   </span>
                 </div>
-                <p className="text-slate-600 truncate mt-1 font-medium">
-                  {liveOverdueInvoices[0].customer.name}
-                  {liveOverdueInvoices[0].customer.company ? ` • ${liveOverdueInvoices[0].customer.company}` : ''}
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
-                  <span>Sisa tagihan:</span>
-                  <span className="font-extrabold text-rose-600">
-                    {formatRupiah(Math.max(0, liveOverdueInvoices[0].totalAmount - (liveOverdueInvoices[0].paidAmount || 0)))}
-                  </span>
+
+                <div className="bg-white/95 rounded-xl p-2.5 border border-rose-200/90 text-[11px] shadow-2xs">
+                  <div className="flex items-center justify-between font-bold text-slate-900">
+                    <span className="text-rose-700 font-black">{currentInv.invoiceNumber}</span>
+                    <span className="text-rose-600 font-semibold text-[10px] bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200">
+                      Tempo: {formatDateIndo(currentInv.dueDate)}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 truncate mt-1 font-medium">
+                    {currentInv.customer.name}
+                    {currentInv.customer.company ? ` • ${currentInv.customer.company}` : ''}
+                  </p>
+                  <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+                    <span>Sisa tagihan:</span>
+                    <span className="font-extrabold text-rose-600">
+                      {formatRupiah(currentUnpaid)}
+                    </span>
+                  </div>
+
+                  {liveOverdueInvoices.length > 1 && (
+                    <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOverdueIdx((prev) => (prev > 0 ? prev - 1 : liveOverdueInvoices.length - 1))}
+                        className="px-2 py-1 text-[10px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition"
+                      >
+                        ‹ Sebelumnya
+                      </button>
+                      <span className="text-[10px] text-slate-400">
+                        {selectedOverdueIdx + 1}/{liveOverdueInvoices.length}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOverdueIdx((prev) => (prev < liveOverdueInvoices.length - 1 ? prev + 1 : 0))}
+                        className="px-2 py-1 text-[10px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition"
+                      >
+                        Berikutnya ›
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectInvoice(currentInv.id)}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2 px-3 transition active:scale-95 shadow-xs"
+                  title="Buka rincian invoice yang jatuh tempo"
+                >
+                  <span>Buka Invoice Menunggak</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => onSelectInvoice(liveOverdueInvoices[0].id)}
-                className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2 px-3 transition active:scale-95 shadow-xs"
-                title="Buka rincian invoice yang jatuh tempo"
-              >
-                <span>Buka Invoice Menunggak</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Card 4: Total Pemasukan Akumulatif */}
@@ -345,113 +439,23 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
             <div 
               className="h-full rounded-full bg-blue-600 transition-all duration-500"
-              style={{ width: `${liveCollectionRate}%` }}
+              style={{ width: `${Math.min(100, Math.max(0, liveCollectionRate))}%` }}
             />
           </div>
-        </div>
-      </div>
-
-      {/* Visual Charts Section: Daily & Monthly Revenue */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart 1: Daily Revenue (Pemasukan Harian Bulan Ini) */}
-        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Pemasukan Harian (Bulan Ini)
-              </h3>
-              <p className="text-xs text-slate-500">
-                Grafik visual penerimaan pembayaran setiap hari
-              </p>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-              <Calendar className="w-3.5 h-3.5 text-blue-600" />
-              <span>Bulan Berjalan</span>
-            </div>
-          </div>
-
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="day" 
-                  tick={{ fontSize: 10, fill: '#64748b' }} 
-                  interval={3}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis 
-                  tick={{ fontSize: 10, fill: '#64748b' }} 
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(val) => `Rp ${(val / 1000000).toFixed(1)}jt`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar 
-                  dataKey="revenue" 
-                  fill="#2563eb" 
-                  radius={[6, 6, 0, 0]} 
-                  maxBarSize={28}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Chart 2: Monthly Revenue Trend (Pemasukan Bulanan) */}
-        <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Tren Pemasukan Bulanan
-              </h3>
-              <p className="text-xs text-slate-500">
-                Perbandingan pendapatan 6 bulan terakhir
-              </p>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-              <span>6 Bulan Terakhir</span>
-            </div>
-          </div>
-
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="label" 
-                  tick={{ fontSize: 10, fill: '#64748b' }} 
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis 
-                  tick={{ fontSize: 10, fill: '#64748b' }} 
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(val) => `Rp ${(val / 1000000).toFixed(1)}jt`}
-                />
-                <Tooltip content={<CustomTooltip />} />
-                <Area 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="#4f46e5" 
-                  strokeWidth={3} 
-                  fillOpacity={1} 
-                  fill="url(#colorRevenue)" 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+            <span>Terkumpul: <strong className="text-emerald-600">{formatRupiah(liveTotalPaidAmount)}</strong></span>
+            <span>Total: <strong>{formatRupiah(liveTotalInvoiceAmount)}</strong></span>
           </div>
         </div>
       </div>
+
+      {/* Visual Charts Section: Daily & Monthly Revenue with Recharts */}
+      <RevenueBarChart
+        dailyChartData={dailyChartData}
+        monthlyChartData={monthlyChartData}
+        invoices={invoices}
+        onSelectInvoice={onSelectInvoice}
+      />
 
       {/* Bottom Section: Recent Real-Time Transactions & Priority Invoices */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -468,18 +472,18 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               </p>
             </div>
             <span className="text-xs font-semibold text-blue-600">
-              {recentTransactions.length} Transaksi Terakhir
+              {liveTransactions.length} Transaksi Terakhir
             </span>
           </div>
 
           <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100">
-            {recentTransactions.length === 0 ? (
+            {liveTransactions.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">Belum ada pembayaran yang tercatat.</p>
               </div>
             ) : (
-              recentTransactions.map((trx) => (
+              liveTransactions.map((trx) => (
                 <div 
                   key={trx.id}
                   className="flex items-center justify-between p-4 hover:bg-slate-50/80 transition"
@@ -494,7 +498,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                           {trx.invoiceNumber}
                         </span>
                         <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 uppercase">
-                          {trx.paymentMethod.replace('_', ' ')}
+                          {(trx.paymentMethod || 'qris_dinamis').replace('_', ' ')}
                         </span>
                       </div>
                       <p className="text-xs text-slate-600 mt-0.5">
@@ -511,8 +515,8 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                       +{formatRupiah(trx.amount)}
                     </span>
                     <button
-                      onClick={() => onSelectInvoice(trx.invoiceId)}
-                      className="mt-1 flex items-center justify-end gap-1 text-xs font-medium text-blue-600 hover:text-blue-800"
+                      onClick={() => onSelectInvoice(trx.invoiceId || trx.invoiceNumber)}
+                      className="mt-1 flex items-center justify-end gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 transition"
                     >
                       <span>Lihat</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -540,9 +544,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   <div className="w-3 h-3 rounded-full bg-emerald-500" />
                   <span className="text-xs font-semibold text-emerald-900">Invoice Lunas</span>
                 </div>
-                <span className="text-sm font-bold text-emerald-700">
-                  {summary.invoiceCounts.paid}
-                </span>
+                <div className="text-right">
+                  <span className="text-sm font-bold text-emerald-700 block">
+                    {livePaidCount} invoice
+                  </span>
+                  <span className="text-[10px] text-emerald-600 font-medium">
+                    {formatRupiah(liveTotalPaidAmount)}
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50/70 border border-amber-100">
@@ -550,9 +559,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   <div className="w-3 h-3 rounded-full bg-amber-500" />
                   <span className="text-xs font-semibold text-amber-900">Menunggu Pembayaran</span>
                 </div>
-                <span className="text-sm font-bold text-amber-700">
-                  {summary.invoiceCounts.pending}
-                </span>
+                <div className="text-right">
+                  <span className="text-sm font-bold text-amber-700 block">
+                    {livePendingCount} invoice
+                  </span>
+                  <span className="text-[10px] text-amber-600 font-medium">
+                    {formatRupiah(livePendingAmount)}
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-2xl bg-rose-50/70 border border-rose-100">
@@ -560,9 +574,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
                   <div className="w-3 h-3 rounded-full bg-rose-500" />
                   <span className="text-xs font-semibold text-rose-900">Melewati Jatuh Tempo</span>
                 </div>
-                <span className="text-sm font-bold text-rose-700">
-                  {summary.invoiceCounts.overdue}
-                </span>
+                <div className="text-right">
+                  <span className="text-sm font-bold text-rose-700 block">
+                    {liveOverdueCount} invoice
+                  </span>
+                  <span className="text-[10px] text-rose-600 font-medium">
+                    {formatRupiah(liveTotalOverdueAmount)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
