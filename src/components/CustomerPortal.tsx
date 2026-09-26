@@ -781,9 +781,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                               </button>
                             )}
 
-                            {activeInvoice.rawQrisString && (
+                            {(activeInvoice.dynamicQris || activeInvoice.staticQris) && (
                               <button
-                                onClick={() => handleCopyQris(activeInvoice.rawQrisString)}
+                                onClick={() => handleCopyQris(activeInvoice.dynamicQris || activeInvoice.staticQris || '')}
                                 className="text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-1.5 transition"
                               >
                                 {copiedQris ? (
@@ -827,14 +827,33 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   )}
 
                   {/* Bank Transfer Alternatives */}
-                  {settings?.bankAccounts && settings.bankAccounts.length > 0 && activeInvoice.status !== 'paid' && (
+                  {activeInvoice.status !== 'paid' && (settings?.bankAccountNumber || settings?.bcaAccountNumber || settings?.briAccountNumber) && (
                     <div className="space-y-2">
                       <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                         <CreditCard className="w-3.5 h-3.5 text-slate-500" />
                         <span>Alternatif Transfer Bank Manual:</span>
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {settings.bankAccounts.map((b) => (
+                        {[
+                          settings?.bcaAccountNumber ? {
+                            id: 'bca',
+                            bankName: 'BCA (Bank Central Asia)',
+                            accountNumber: settings.bcaAccountNumber,
+                            accountHolder: settings.bcaAccountHolder || settings.businessName || 'Pengelola',
+                          } : null,
+                          settings?.briAccountNumber ? {
+                            id: 'bri',
+                            bankName: 'BRI',
+                            accountNumber: settings.briAccountNumber,
+                            accountHolder: settings.briAccountHolder || settings.businessName || 'Pengelola',
+                          } : null,
+                          (settings?.bankAccountNumber && settings.bankAccountNumber !== settings.bcaAccountNumber && settings.bankAccountNumber !== settings.briAccountNumber) ? {
+                            id: 'main-bank',
+                            bankName: settings.bankName || 'Bank Transfer',
+                            accountNumber: settings.bankAccountNumber,
+                            accountHolder: settings.bankAccountHolder || settings.businessName || 'Pengelola',
+                          } : null,
+                        ].filter(Boolean).map((b: any) => (
                           <div
                             key={b.id}
                             className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2"
@@ -875,19 +894,16 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           {activeInvoice.items?.map((item) => (
                             <tr key={item.id} className="hover:bg-slate-50/50">
                               <td className="py-2.5 px-3">
-                                <span className="font-bold text-slate-900 block">{item.name}</span>
-                                {item.description && (
-                                  <span className="text-[11px] text-slate-500">{item.description}</span>
-                                )}
+                                <span className="font-bold text-slate-900 block">{item.description}</span>
                               </td>
                               <td className="py-2.5 px-3 text-center text-slate-600 font-mono">
-                                {item.quantity} {item.unit || ''}
+                                {item.quantity}
                               </td>
                               <td className="py-2.5 px-3 text-right text-slate-600 font-mono">
                                 {formatRupiah(item.price)}
                               </td>
                               <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                                {formatRupiah(item.amount)}
+                                {formatRupiah(item.total || (item.quantity * item.price))}
                               </td>
                             </tr>
                           ))}
@@ -902,7 +918,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         </div>
                         {activeInvoice.taxAmount ? (
                           <div className="flex justify-between text-slate-500">
-                            <span>PPN ({activeInvoice.taxRate || 11}%):</span>
+                            <span>PPN ({activeInvoice.taxPercent || 11}%):</span>
                             <span className="font-mono">{formatRupiah(activeInvoice.taxAmount)}</span>
                           </div>
                         ) : null}

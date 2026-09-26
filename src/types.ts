@@ -348,10 +348,11 @@ export interface BusinessSettings {
     enabled: boolean;
     generateDay: number; // e.g. 1 (awal bulan), 5, 10, 20
     dateOption?: 'system' | 'custom';
+    selectedPreset?: 'isp_billing' | 'beginning_month' | 'mid_month' | 'end_month' | 'custom';
     customIssueDay?: number;
-    dueDateOption: 'system' | 'custom';
-    dueDaysOffset: number; // e.g. 10 (Jatuh tempo tgl 10 atau +7 hari)
-    customDueDay?: number;
+    dueDateOption: 'system' | 'custom' | 'fixed_day';
+    dueDaysOffset: number; // e.g. 15 (Jatuh tempo +15 hari)
+    customDueDay?: number; // e.g. 20 (Jatuh tempo setiap tanggal 20)
     includeVpn: boolean;
     includeMonitoring: boolean;
     defaultVpnPrice?: number;

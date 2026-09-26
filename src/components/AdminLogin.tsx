@@ -9,7 +9,10 @@ import {
   AlertCircle, 
   KeyRound, 
   QrCode,
-  ExternalLink
+  ExternalLink,
+  Zap,
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 import { AdminUser } from '../types';
 
@@ -24,20 +27,14 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   onGoToCustomerPortal,
   businessName = 'InvoiceKilat'
 }) => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setErrorMessage('Username atau email dan password wajib diisi.');
-      return;
-    }
-
+  const executeLogin = async (userToLogin: string, passToLogin: string) => {
     setIsLoading(true);
     setErrorMessage('');
 
@@ -46,8 +43,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: username.trim(),
-          password: password.trim(),
+          username: userToLogin.trim(),
+          password: passToLogin.trim(),
           rememberMe,
         }),
       });
@@ -75,6 +72,39 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     }
   };
 
+  const handleQuickBypassLogin = async (targetUsername: string = 'admin') => {
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const res = await fetch('/api/auth/quick-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: targetUsername }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.user) {
+        localStorage.setItem('admin_token', data.token);
+        localStorage.setItem('admin_user', JSON.stringify(data.user));
+        onLoginSuccess(data.user, data.token);
+        return;
+      }
+    } catch {}
+
+    // Fallback normal login
+    await executeLogin(targetUsername, 'admin123');
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) {
+      setErrorMessage('Username atau email dan password wajib diisi.');
+      return;
+    }
+    executeLogin(username, password);
+  };
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-8 px-4 sm:px-6">
       <div className="w-full max-w-md space-y-6">
@@ -98,20 +128,69 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/60 border border-slate-200/80">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/60 border border-slate-200/80 space-y-4">
+          {/* Quick Access One-Click Button */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/50 to-sky-50 border border-blue-200/80 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-blue-900 flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-amber-500 fill-amber-400" />
+                Akses Cepat 1-Klik (Langsung Masuk)
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                Siap Pakai
+              </span>
+            </div>
+            <p className="text-[11px] text-blue-700/90 leading-tight">
+              Klik tombol di bawah ini untuk langsung masuk sebagai Super Admin tanpa perlu mengetik kata sandi secara manual.
+            </p>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                id="btn-quick-login-budi"
+                onClick={() => handleQuickBypassLogin('admin')}
+                disabled={isLoading}
+                className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Masuk Admin</span>
+              </button>
+              <button
+                type="button"
+                id="btn-quick-login-heru"
+                onClick={() => handleQuickBypassLogin('heruu2004')}
+                disabled={isLoading}
+                className="py-2.5 px-3 rounded-xl bg-white border border-blue-300 hover:bg-blue-50 active:scale-95 text-blue-900 font-bold text-xs shadow-2xs transition flex items-center justify-center gap-1.5"
+              >
+                <span>Masuk Heru</span>
+              </button>
+            </div>
+          </div>
+
           {errorMessage && (
-            <div className="mb-5 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-800 text-xs animate-shake">
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-800 text-xs animate-shake">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div className="font-medium leading-relaxed">{errorMessage}</div>
             </div>
           )}
 
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-slate-200"></div>
+            <span className="flex-shrink mx-3 text-[10px] uppercase font-bold text-slate-400">Atau Masuk Manual</span>
+            <div className="flex-grow border-t border-slate-200"></div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username / Email Input */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Username atau Alamat Email
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Username atau Alamat Email
+                </label>
+                <span className="text-[11px] text-blue-600 font-semibold cursor-pointer hover:underline" onClick={() => { setUsername('admin'); setPassword('admin123'); }}>
+                  Gunakan: admin
+                </span>
+              </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                   <User className="w-4 h-4" />
@@ -133,6 +212,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                 <label className="block text-xs font-bold text-slate-700">
                   Kata Sandi (Password)
                 </label>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  Default: <code className="text-blue-600 bg-blue-50 px-1 rounded font-mono">admin123</code>
+                </span>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -176,7 +258,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-sm shadow-md shadow-blue-500/25 flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
               {isLoading ? (
                 <>
@@ -185,7 +267,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                 </>
               ) : (
                 <>
-                  <span>Masuk ke Portal Pengelola</span>
+                  <span>Masuk dengan Kredensial Ini</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

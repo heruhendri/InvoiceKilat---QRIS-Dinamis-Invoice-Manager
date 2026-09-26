@@ -172,9 +172,14 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
     setNotes('');
     setCustomerMode(initialMode);
     setRecurringEnabled(true);
-    setIncludeVpn(false);
-    setIncludeMonitoring(false);
-    setSelectedRecurringAddonIds([]);
+    const defaultVpn = initialMode === 'noc';
+    const defaultMon = initialMode === 'noc';
+    setIncludeVpn(defaultVpn);
+    setIncludeMonitoring(defaultMon);
+    const defaultAddonIds: string[] = [];
+    if (defaultVpn) defaultAddonIds.push('addon-vpn');
+    if (defaultMon) defaultAddonIds.push('addon-mon');
+    setSelectedRecurringAddonIds(defaultAddonIds);
     setPppoeBillingMethod('monthly_average');
     setMonthlyAveragePppoeCount('');
     setCustomMonthlyAmount(2500000);
@@ -219,9 +224,19 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
     setNotes(c.notes || '');
     setCustomerMode(c.customerMode || 'biasa');
     setRecurringEnabled(c.recurringEnabled !== false);
-    setIncludeVpn(c.includeVpn || false);
-    setIncludeMonitoring(c.includeMonitoring || false);
-    setSelectedRecurringAddonIds(c.recurringAddonIds || []);
+    
+    // Ensure both boolean flags and recurringAddonIds are synchronized and preserved
+    const vpnActive = c.includeVpn === true || (Array.isArray(c.recurringAddonIds) && c.recurringAddonIds.includes('addon-vpn'));
+    const monActive = c.includeMonitoring === true || (Array.isArray(c.recurringAddonIds) && c.recurringAddonIds.includes('addon-mon'));
+    
+    setIncludeVpn(vpnActive);
+    setIncludeMonitoring(monActive);
+    
+    const initialAddons = new Set(Array.isArray(c.recurringAddonIds) ? c.recurringAddonIds : []);
+    if (vpnActive) initialAddons.add('addon-vpn'); else initialAddons.delete('addon-vpn');
+    if (monActive) initialAddons.add('addon-mon'); else initialAddons.delete('addon-mon');
+    setSelectedRecurringAddonIds(Array.from(initialAddons));
+    
     setPppoeBillingMethod(c.pppoeBillingMethod || c.mikrotik?.preferredBillingMethod || 'monthly_average');
     setMonthlyAveragePppoeCount(
       c.monthlyAveragePppoeCount !== undefined
@@ -733,6 +748,12 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
           : (mikrotikTestResult?.monthlyAverageNonIsolir || editingCustomer?.mikrotik?.monthlyAverageNonIsolir || mikrotikTestResult?.nonIsolirCount || editingCustomer?.mikrotik?.nonIsolirCount || 0),
       } : undefined;
 
+      const vpnFinal = includeVpn === true || selectedRecurringAddonIds.includes('addon-vpn');
+      const monFinal = includeMonitoring === true || selectedRecurringAddonIds.includes('addon-mon');
+      const addonsFinal = new Set(selectedRecurringAddonIds);
+      if (vpnFinal) addonsFinal.add('addon-vpn'); else addonsFinal.delete('addon-vpn');
+      if (monFinal) addonsFinal.add('addon-mon'); else addonsFinal.delete('addon-mon');
+
       const payload: Partial<CustomerRecord> = {
         ...(editingCustomer ? { id: editingCustomer.id } : {}),
         name: name.trim(),
@@ -743,9 +764,9 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
         notes: notes.trim(),
         customerMode,
         recurringEnabled,
-        includeVpn,
-        includeMonitoring,
-        recurringAddonIds: selectedRecurringAddonIds,
+        includeVpn: vpnFinal,
+        includeMonitoring: monFinal,
+        recurringAddonIds: Array.from(addonsFinal),
         pppoeBillingMethod,
         monthlyAveragePppoeCount: typeof monthlyAveragePppoeCount === 'number' && !isNaN(monthlyAveragePppoeCount)
           ? monthlyAveragePppoeCount
@@ -2887,12 +2908,13 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
                       Pengaturan Tagihan Bulanan Otomatis (Recurring)
                     </span>
                   </div>
-                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700">
+                  <label htmlFor="customer-checkbox-recurring-enabled" className="flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-slate-700 select-none">
                     <input
+                      id="customer-checkbox-recurring-enabled"
                       type="checkbox"
                       checked={recurringEnabled}
                       onChange={(e) => setRecurringEnabled(e.target.checked)}
-                      className="rounded text-blue-600 focus:ring-blue-500"
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
                     <span>Aktifkan Tagihan Bulanan</span>
                   </label>
@@ -2924,55 +2946,81 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <label className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition text-xs ${
-                      includeVpn ? 'bg-indigo-50/70 border-indigo-300 ring-1 ring-indigo-200' : 'bg-white border-indigo-100 hover:border-indigo-300'
-                    }`}>
+                    <label
+                      htmlFor="customer-checkbox-vpn"
+                      className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition text-xs select-none ${
+                        includeVpn 
+                          ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-200/80 shadow-xs' 
+                          : 'bg-white border-indigo-100 hover:border-indigo-300'
+                      }`}
+                    >
                       <input
+                        id="customer-checkbox-vpn"
                         type="checkbox"
                         checked={includeVpn}
                         onChange={(e) => {
                           const checked = e.target.checked;
                           setIncludeVpn(checked);
-                          if (checked) {
-                            setSelectedRecurringAddonIds((prev) => Array.from(new Set([...prev, 'addon-vpn'])));
-                          } else {
-                            setSelectedRecurringAddonIds((prev) => prev.filter((id) => id !== 'addon-vpn'));
-                          }
+                          setSelectedRecurringAddonIds((prev) => {
+                            const set = new Set(prev);
+                            if (checked) set.add('addon-vpn'); else set.delete('addon-vpn');
+                            return Array.from(set);
+                          });
                         }}
-                        className="mt-0.5 rounded text-indigo-600"
+                        className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                       />
-                      <div>
-                        <span className="font-bold text-slate-900 block text-[11px]">
-                          Layanan VPN Remote Mikrotik
-                        </span>
-                        <span className="text-[10px] text-indigo-600 font-semibold">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-slate-900 block text-xs">
+                            Layanan VPN Remote Mikrotik
+                          </span>
+                          {includeVpn && (
+                            <span className="text-[9.5px] font-bold text-indigo-700 bg-indigo-100/90 px-1.5 py-0.2 rounded">
+                              Terpilih
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-indigo-600 font-bold">
                           +Rp 50.000 / bln
                         </span>
                       </div>
                     </label>
 
-                    <label className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition text-xs ${
-                      includeMonitoring ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-200' : 'bg-white border-indigo-100 hover:border-indigo-300'
-                    }`}>
+                    <label
+                      htmlFor="customer-checkbox-mon"
+                      className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition text-xs select-none ${
+                        includeMonitoring 
+                          ? 'bg-emerald-50/90 border-emerald-400 ring-2 ring-emerald-200/80 shadow-xs' 
+                          : 'bg-white border-indigo-100 hover:border-indigo-300'
+                      }`}
+                    >
                       <input
+                        id="customer-checkbox-mon"
                         type="checkbox"
                         checked={includeMonitoring}
                         onChange={(e) => {
                           const checked = e.target.checked;
                           setIncludeMonitoring(checked);
-                          if (checked) {
-                            setSelectedRecurringAddonIds((prev) => Array.from(new Set([...prev, 'addon-mon'])));
-                          } else {
-                            setSelectedRecurringAddonIds((prev) => prev.filter((id) => id !== 'addon-mon'));
-                          }
+                          setSelectedRecurringAddonIds((prev) => {
+                            const set = new Set(prev);
+                            if (checked) set.add('addon-mon'); else set.delete('addon-mon');
+                            return Array.from(set);
+                          });
                         }}
-                        className="mt-0.5 rounded text-indigo-600"
+                        className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
-                      <div>
-                        <span className="font-bold text-slate-900 block text-[11px]">
-                          Biaya Monitoring Jaringan NOC 24/7
-                        </span>
-                        <span className="text-[10px] text-emerald-600 font-semibold">
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-slate-900 block text-xs">
+                            Biaya Monitoring Jaringan NOC 24/7
+                          </span>
+                          {includeMonitoring && (
+                            <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.2 rounded">
+                              Terpilih
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-emerald-600 font-bold">
                           +Rp 250.000 / bln
                         </span>
                       </div>
@@ -2986,29 +3034,41 @@ export const CustomerDirectory: React.FC<CustomerDirectoryProps> = ({
                         return (
                           <label
                             key={addon.id}
-                            className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition text-xs ${
+                            htmlFor={`customer-checkbox-addon-${addon.id}`}
+                            className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition text-xs select-none ${
                               isSelected
-                                ? 'bg-indigo-50/70 border-indigo-300 ring-1 ring-indigo-200'
+                                ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-200/80 shadow-xs'
                                 : 'bg-white border-indigo-100 hover:border-indigo-300'
                             }`}
                           >
                             <input
+                              id={`customer-checkbox-addon-${addon.id}`}
                               type="checkbox"
                               checked={isSelected}
                               onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedRecurringAddonIds((prev) => [...prev, addon.id]);
-                                } else {
-                                  setSelectedRecurringAddonIds((prev) => prev.filter((id) => id !== addon.id));
-                                }
+                                const checked = e.target.checked;
+                                setSelectedRecurringAddonIds((prev) => {
+                                  const set = new Set(prev);
+                                  if (checked) set.add(addon.id); else set.delete(addon.id);
+                                  return Array.from(set);
+                                });
+                                if (addon.id === 'addon-vpn') setIncludeVpn(checked);
+                                if (addon.id === 'addon-mon') setIncludeMonitoring(checked);
                               }}
-                              className="mt-0.5 rounded text-indigo-600"
+                              className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                             />
-                            <div>
-                              <span className="font-bold text-slate-900 block text-[11px]">
-                                {addon.name}
-                              </span>
-                              <span className="text-[10px] text-blue-600 font-semibold">
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-extrabold text-slate-900 block text-xs">
+                                  {addon.name}
+                                </span>
+                                {isSelected && (
+                                  <span className="text-[9.5px] font-bold text-indigo-700 bg-indigo-100/90 px-1.5 py-0.2 rounded">
+                                    Terpilih
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-blue-600 font-bold">
                                 +{formatRupiah(addon.price)} / {addon.unit || 'bln'}
                               </span>
                             </div>

@@ -27,11 +27,11 @@ interface ServiceCatalogProps {
   onSaveService?: (service: Partial<ServiceItem>) => Promise<void>;
   onAddService?: (service: Partial<ServiceItem>) => Promise<void>;
   onUpdateService?: (id: string, service: Partial<ServiceItem>) => Promise<void>;
-  onDeleteService: (id: string) => Promise<void>;
+  onDeleteService: (id: string) => void | Promise<void>;
   onSaveRecurringAddon?: (addon: Partial<RecurringAddonService>) => Promise<void>;
   onAddRecurringAddon?: (addon: Partial<RecurringAddonService>) => Promise<void>;
   onUpdateRecurringAddon?: (id: string, addon: Partial<RecurringAddonService>) => Promise<void>;
-  onDeleteRecurringAddon?: (id: string) => Promise<void>;
+  onDeleteRecurringAddon?: (id: string) => void | Promise<void>;
 }
 
 export const ServiceCatalog: React.FC<ServiceCatalogProps> = ({

@@ -306,6 +306,7 @@ const DEFAULT_CUSTOMERS: CustomerRecord[] = [
     recurringEnabled: true,
     includeVpn: true,
     includeMonitoring: true,
+    recurringAddonIds: ['addon-vpn', 'addon-mon'],
     pppoeBillingMethod: 'monthly_average',
     monthlyAveragePppoeCount: 135,
     password: 'client123',
