@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
@@ -6,7 +7,24 @@ import { initDailyTelegramBackupScheduler } from './server/telegram';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+
+  // Custom port support: CLI flag (--port / -p), process.env.PORT, or fallback to 3000
+  let cliPort: number | undefined;
+  const portArgIndex = process.argv.findIndex(arg => arg === '--port' || arg === '-p');
+  if (portArgIndex !== -1 && process.argv[portArgIndex + 1]) {
+    cliPort = parseInt(process.argv[portArgIndex + 1], 10);
+  } else {
+    const inlinePortArg = process.argv.find(arg => arg.startsWith('--port='));
+    if (inlinePortArg) {
+      cliPort = parseInt(inlinePortArg.split('=')[1], 10);
+    }
+  }
+
+  const PORT = (!isNaN(Number(cliPort)) && Number(cliPort) > 0)
+    ? Number(cliPort)
+    : (process.env.PORT && !isNaN(Number(process.env.PORT)) && Number(process.env.PORT) > 0)
+      ? parseInt(process.env.PORT, 10)
+      : 3000;
 
   // Middleware for body parsing
   app.use(express.json({ limit: '10mb' }));

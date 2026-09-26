@@ -172,11 +172,35 @@ Aplikasi Anda kini langsung aktif di domain Anda dengan Node.js 16!
 
 ---
 
-### Opsi 4: VPS Server Pribadi (Ubuntu / Debian dengan PM2 & Nginx)
+### Opsi 4: VPS Server Pribadi (Installer Otomatis 1-Klik & Custom Port)
 
-Jika Anda memiliki VPS di DigitalOcean, Linode, AWS EC2, IDCloudHost, atau Niagahoster:
+Jika Anda memiliki VPS di DigitalOcean, Linode, AWS EC2, Contabo, IDCloudHost, atau Niagahoster:
 
-#### 1. Masuk ke VPS dan Pasang Node.js 20 & Git:
+#### ⚡ Metode 1: Installer Otomatis (Direkomendasikan)
+Tersedia skrip installer otomatis **`install-vps.sh`** yang mendeteksi OS, memasang Node.js 20 LTS, mengizinkan **kustomisasi port** (misal: 8080, 5000, 3000), mengonfigurasi PM2/systemd, firewall UFW, serta Nginx Reverse Proxy & SSL Let's Encrypt secara otomatis.
+
+1. **Clone dan Jalankan Installer di VPS:**
+   ```bash
+   git clone https://github.com/USERNAME/invoice-kilat.git
+   cd invoice-kilat
+   sudo bash install-vps.sh
+   ```
+2. **Atau jalankan langsung dengan parameter port kustom:**
+   ```bash
+   # Contoh menjalankan di Port 8080 tanpa interaksi:
+   sudo bash install-vps.sh --port 8080 --yes
+
+   # Contoh instalasi lengkap dengan Port 8080 + Domain Nginx + SSL HTTPS otomatis:
+   sudo bash install-vps.sh --port 8080 --domain invoice.domainanda.com --ssl --yes
+   ```
+
+---
+
+#### 🛠️ Metode 2: Instalasi Manual di VPS (dengan Port Kustom)
+
+Jika Anda ingin melakukan langkah demi langkah sendiri:
+
+##### 1. Masuk ke VPS dan Pasang Node.js 20 & Git:
 ```bash
 # Update sistem
 sudo apt update && sudo apt upgrade -y
@@ -189,29 +213,34 @@ sudo apt install -y nodejs git nginx
 sudo npm install -g pm2
 ```
 
-#### 2. Clone Repositori dan Jalankan Build:
+##### 2. Clone Repositori dan Tentukan Port Kustom:
 ```bash
 # Clone repositori dari GitHub
 git clone https://github.com/USERNAME/invoice-kilat.git
 cd invoice-kilat
 
-# Install dependency
-npm install
+# Salin konfigurasi environment & ubah PORT sesuai keinginan (misal: 8080)
+cp .env.example .env
+sed -i 's/^PORT=.*/PORT=8080/' .env
 
-# Build aplikasi untuk production
+# Install dependency & build aplikasi
+npm install
 npm run build
 
-# Jalankan server dengan PM2
-pm2 start dist/server.cjs --name "invoice-kilat"
+# Jalankan server dengan PM2 pada port yang telah ditentukan
+PORT=8080 pm2 start dist/server.cjs --name "invoice-kilat"
 pm2 save
 pm2 startup
 ```
 
-#### 3. Konfigurasi Nginx Reverse Proxy (Domain / Subdomain):
+##### 3. Konfigurasi Nginx Reverse Proxy (Domain / Subdomain):
 Edit konfigurasi Nginx:
 ```bash
 sudo nano /etc/nginx/sites-available/invoice-kilat
 ```
+
+Tempelkan konfigurasi berikut (sesuaikan port jika menggunakan selain 3000, misal: `8080`):
+
 
 Tempelkan konfigurasi berikut:
 ```nginx
