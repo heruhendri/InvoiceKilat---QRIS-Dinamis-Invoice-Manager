@@ -21,6 +21,11 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
   const duration = 5000; // 5 seconds auto-dismiss
   const intervalStep = 50;
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!event) return;
     setProgress(100);
@@ -31,17 +36,21 @@ export const NotificationToast: React.FC<NotificationToastProps> = ({
 
     const timer = setInterval(() => {
       setProgress((prev) => {
-        if (prev <= 0) {
+        const next = prev - (intervalStep / duration) * 100;
+        if (next <= 0) {
           clearInterval(timer);
-          onClose();
+          // Safely execute outside state updater / render phase
+          setTimeout(() => {
+            onCloseRef.current();
+          }, 0);
           return 0;
         }
-        return prev - (intervalStep / duration) * 100;
+        return next;
       });
     }, intervalStep);
 
     return () => clearInterval(timer);
-  }, [event, isPaused, onClose]);
+  }, [event, isPaused]);
 
   if (!event) return null;
 

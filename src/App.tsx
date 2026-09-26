@@ -283,6 +283,10 @@ export default function App() {
     fetchData();
   }, [fetchData]);
 
+  const handleCloseToast = useCallback(() => {
+    setActiveToast(null);
+  }, []);
+
   const { isConnected, notifications, unreadCount, clearUnread } = useRealtimeSync(handleRealtimeEvent);
 
   // Find currently selected invoice
@@ -758,7 +762,7 @@ export default function App() {
       {activePortal === 'admin' && (
         <NotificationToast
           event={activeToast}
-          onClose={() => setActiveToast(null)}
+          onClose={handleCloseToast}
           onSelectInvoice={(id) => setSelectedInvoiceId(id)}
         />
       )}
@@ -873,6 +877,7 @@ export default function App() {
               <AnalyticsDashboard
                 analytics={analytics}
                 invoices={invoices}
+                customers={customers}
                 onSelectInvoice={(id) => setSelectedInvoiceId(id)}
                 onOpenCreateInvoice={() => {
                   setPreselectedCustomer(null);

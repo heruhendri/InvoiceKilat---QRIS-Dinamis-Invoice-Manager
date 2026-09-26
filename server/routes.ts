@@ -67,6 +67,16 @@ function getSafeUser(user: AdminUser): AdminUserSafe {
   return safe;
 }
 
+function formatRupiah(amount: number): string {
+  if (isNaN(amount) || amount === null || amount === undefined) return 'Rp 0';
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 function extractToken(req: Request): string | null {
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
