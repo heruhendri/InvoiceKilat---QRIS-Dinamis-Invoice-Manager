@@ -5,6 +5,13 @@ import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes';
 import { initDailyTelegramBackupScheduler } from './server/telegram';
 
+process.on('uncaughtException', (err) => {
+  console.error('[Process Uncaught Exception]:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Process Unhandled Rejection]:', reason);
+});
+
 async function startServer() {
   const app = express();
 
@@ -33,7 +40,13 @@ async function startServer() {
   // API Routes FIRST before any frontend or asset handler
   app.use('/api', apiRouter);
 
-  // Health check
+  // Direct Mikhmon Webserver Portal Route
+  app.get('/mikhmon/portal/:id', (req, res, next) => {
+    req.url = `/mikhmon/portal/${req.params.id}`;
+    return apiRouter(req, res, next);
+  });
+
+  // Health check - immediately available for instant readiness
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
@@ -44,11 +57,33 @@ async function startServer() {
 
   // Vite middleware in development vs static dist in production
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
+    let viteMiddleware: express.RequestHandler | null = null;
+    const vitePromise = createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
+    }).then((vite) => {
+      viteMiddleware = vite.middlewares;
+      console.log('⚡ Vite dev server initialized');
+      return vite;
+    }).catch((err) => {
+      console.error('❌ Failed to create Vite dev server:', err);
+      throw err;
     });
-    app.use(vite.middlewares);
+
+    app.use(async (req, res, next) => {
+      if (viteMiddleware) {
+        return viteMiddleware(req, res, next);
+      }
+      try {
+        await vitePromise;
+        if (viteMiddleware) {
+          return viteMiddleware(req, res, next);
+        }
+      } catch (err) {
+        return next(err);
+      }
+      next();
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
@@ -57,11 +92,20 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`InvoiceKilat Server running at http://0.0.0.0:${PORT}`);
     // Boot daily automated Telegram backup scheduler
     initDailyTelegramBackupScheduler();
   });
+
+  const shutdown = () => {
+    server.close(() => {
+      console.log('Server gracefully stopped');
+      process.exit(0);
+    });
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 startServer();

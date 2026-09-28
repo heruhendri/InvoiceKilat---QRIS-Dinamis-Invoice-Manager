@@ -10,7 +10,12 @@ import {
   BillingAutomationRule, 
   AutomationDispatchLog,
   AdminUser,
-  RecurringAddonService
+  RecurringAddonService,
+  MikhmonPlan,
+  MikhmonInstance,
+  MikhmonUploadedPackage,
+  MikhmonServerConfig,
+  MikhmonVoucher
 } from './types';
 import { convertToDynamicQris, generateQrDataUrl } from './qris';
 
@@ -31,7 +36,13 @@ export interface DatabaseSchema {
   automationLogs: AutomationDispatchLog[];
   remindersLog: ReminderLog[];
   adminUsers?: AdminUser[];
+  mikhmonInstances?: MikhmonInstance[];
+  mikhmonPlans?: MikhmonPlan[];
+  mikhmonServerSettings?: MikhmonServerConfig;
+  mikhmonVouchers?: MikhmonVoucher[];
 }
+
+
 
 export const DEFAULT_ADMIN_USERS: AdminUser[] = [
   {
@@ -293,7 +304,177 @@ export const DEFAULT_RECURRING_ADDONS: RecurringAddonService[] = [
   },
 ];
 
+export const DEFAULT_MIKHMON_PLANS: MikhmonPlan[] = [
+  {
+    id: 'plan-basic-1',
+    name: 'Mikhmon Cloud Basic (1 Router)',
+    description: 'Cocok untuk RT/RW Net pemula, Cafe, atau Kos-kosan dengan 1 router MikroTik.',
+    price: 15000,
+    billingCycle: 'monthly',
+    maxRouters: 1,
+    features: ['1 Router MikroTik', 'Subdomain Kustom .mikhmon.online', 'Akses Online 24/7', 'Cetak Voucher Hotspot', 'Auto Backup Session'],
+    isPopular: false,
+  },
+  {
+    id: 'plan-pro-3',
+    name: 'Mikhmon Cloud Pro (3 Router)',
+    description: 'Paling diminati! Untuk pengusaha hotspot dengan 2-3 cabang atau router distribusi.',
+    price: 35000,
+    billingCycle: 'monthly',
+    maxRouters: 3,
+    features: ['Hingga 3 Router MikroTik', 'Dedicated Port VPN Tunnel Remote', 'Multi Session Monitoring', 'Template Voucher Premium', 'Notifikasi Telegram/WA'],
+    isPopular: true,
+  },
+  {
+    id: 'plan-isp-unlimited',
+    name: 'Mikhmon Cloud WISP Sultan (Unlimited)',
+    description: 'Untuk ISP skala menengah, pengelola RT/RW Net besar dengan banyak titik router.',
+    price: 75000,
+    billingCycle: 'monthly',
+    maxRouters: 999,
+    features: ['Unlimited Router MikroTik', 'Dedicated Tunnel VPN High Speed', 'API Billing Terintegrasi', 'Dukungan Prioritas 24/7', 'Auto Isolir & Reconnect'],
+    isPopular: false,
+  },
+  {
+    id: 'plan-annual-pro',
+    name: 'Mikhmon Cloud Pro Tahunan (Hemat 2 Bulan)',
+    description: 'Langganan tahunan hemat 2 bulan bayar penuh sekaligus dengan proteksi harga 1 tahun.',
+    price: 350000,
+    billingCycle: 'annual',
+    maxRouters: 3,
+    features: ['Hingga 3 Router MikroTik', 'Free VPN Remote 1 Tahun', 'Hemat Biaya 2 Bulan', 'Prioritas Bandwidth Server'],
+    isPopular: false,
+  }
+];
+
+export const DEFAULT_MIKHMON_INSTANCES: MikhmonInstance[] = [
+  {
+    id: 'mikh-inst-1',
+    customerId: 'cust-noc-1',
+    customerName: 'Heru Pratama (Fiberku.net / ACO)',
+    customerPhone: '6281299887766',
+    customerEmail: 'noc@fiberku.net',
+    sessionName: 'FIBERKU_HOTSPOT_ACO',
+    subdomain: 'fiberku.mikhmon.online',
+    serverUrl: 'https://fiberku.mikhmon.online',
+    mikhmonVersion: 'Mikhmon V3 (PHP 8 Cloud)',
+    adminUsername: 'mikhmon',
+    adminPassword: '••••••••',
+    planId: 'plan-pro-3',
+    planName: 'Mikhmon Cloud Pro (3 Router)',
+    price: 35000,
+    billingCycle: 'monthly',
+    status: 'active',
+    startDate: '2026-08-01',
+    dueDate: '2026-10-01',
+    mikrotikHost: 'id-6.hostddns.us',
+    mikrotikPort: 10941,
+    mikrotikUser: 'mikhmon',
+    autoInvoice: true,
+    autoSuspend: true,
+    notes: 'Klien aktif - Hotspot Fiberku ACO 135 users PPPoE + 50 voucher harian',
+    lastInvoiceNumber: 'INV-2026-0001',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'mikh-inst-2',
+    customerId: 'cust-noc-2',
+    customerName: 'Fajar Nugroho (SkyLink Wireless)',
+    customerPhone: '6285712345678',
+    customerEmail: 'fajar@skylink.id',
+    sessionName: 'SKYLINK_HOTSPOT_VOUCHER',
+    subdomain: 'skylink.mikhmon.online',
+    serverUrl: 'https://skylink.mikhmon.online',
+    mikhmonVersion: 'Mikhmon V3 (PHP 8 Cloud)',
+    adminUsername: 'admin',
+    adminPassword: '••••••••',
+    planId: 'plan-basic-1',
+    planName: 'Mikhmon Cloud Basic (1 Router)',
+    price: 15000,
+    billingCycle: 'monthly',
+    status: 'active',
+    startDate: '2026-08-15',
+    dueDate: '2026-09-28',
+    mikrotikHost: 'sky-router.id-vpn.net',
+    mikrotikPort: 8728,
+    mikrotikUser: 'mikhmon_sky',
+    autoInvoice: true,
+    autoSuspend: true,
+    notes: 'Hotspot Warkop & Warnet 1 Router hAP ac2',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'mikh-inst-3',
+    customerId: 'cust-noc-3',
+    customerName: 'Ahmad Dahlan (WIFI_KOST_BERKAH)',
+    customerPhone: '6287890123456',
+    customerEmail: 'kostberkah@gmail.com',
+    sessionName: 'KOST_BERKAH_HOTSPOT',
+    subdomain: 'kostberkah.mikhmon.online',
+    serverUrl: 'https://kostberkah.mikhmon.online',
+    mikhmonVersion: 'Mikhmon V4 Cloud',
+    adminUsername: 'admin',
+    adminPassword: '••••••••',
+    planId: 'plan-basic-1',
+    planName: 'Mikhmon Cloud Basic (1 Router)',
+    price: 15000,
+    billingCycle: 'monthly',
+    status: 'suspended',
+    startDate: '2026-07-20',
+    dueDate: '2026-09-20',
+    mikrotikHost: '103.147.20.12',
+    mikrotikPort: 8728,
+    mikrotikUser: 'mikhmon_kost',
+    autoInvoice: true,
+    autoSuspend: true,
+    notes: 'Belum bayar perpanjangan bulan September - Suspended otomatis',
+    createdAt: new Date().toISOString(),
+  }
+];
+
+export const DEFAULT_MIKHMON_SERVER_CONFIG: MikhmonServerConfig = {
+  masterDomain: 'mikhmon.online',
+  fallbackIpOrHost: '103.147.20.12',
+  webRootDir: '/var/www/mikhmon',
+  activeVersion: 'Mikhmon V3.20 (PHP 8.2 LTS)',
+  phpVersion: 'php8.2-fpm',
+  serverType: 'nginx_php_fpm',
+  httpPort: 80,
+  httpsPort: 443,
+  sslProvider: 'letsencrypt',
+  sslEmail: 'admin@ciptamedia.id',
+  wildcardEnabled: true,
+  autoCreateVhost: true,
+  uploadedPackages: [
+    {
+      id: 'pkg-v3-20',
+      fileName: 'mikhmon-v3.20-master.zip',
+      version: 'Mikhmon V3.20 Official (PHP 8.2 Compatible)',
+      fileSizeBytes: 2458120,
+      uploadedAt: new Date().toISOString(),
+      isDefault: true,
+      extractedPath: '/var/www/mikhmon/v3',
+      status: 'active',
+      notes: 'Paket web standar resmi dengan dukungan PHP 7.4 / 8.0 / 8.2'
+    },
+    {
+      id: 'pkg-v4-preview',
+      fileName: 'mikhmon-v4-cloud-dashboard.zip',
+      version: 'Mikhmon V4 Cloud Edition (Modern Responsive UI)',
+      fileSizeBytes: 3894100,
+      uploadedAt: new Date().toISOString(),
+      isDefault: false,
+      extractedPath: '/var/www/mikhmon/v4',
+      status: 'ready',
+      notes: 'Tema modern dengan grafik voucher real-time dan dark mode'
+    }
+  ],
+  customNginxConfig: '',
+};
+
 const DEFAULT_CUSTOMERS: CustomerRecord[] = [
+
+
   {
     id: 'cust-noc-1',
     name: 'Heru Pratama (Fiberku.net / ACO)',
@@ -530,6 +711,15 @@ export async function getDatabase(): Promise<DatabaseSchema> {
       if (!cachedDb!.adminUsers || cachedDb!.adminUsers.length === 0) {
         cachedDb!.adminUsers = DEFAULT_ADMIN_USERS;
       }
+      if (!cachedDb!.mikhmonPlans || cachedDb!.mikhmonPlans.length === 0) {
+        cachedDb!.mikhmonPlans = DEFAULT_MIKHMON_PLANS;
+      }
+      if (!cachedDb!.mikhmonInstances || cachedDb!.mikhmonInstances.length === 0) {
+        cachedDb!.mikhmonInstances = DEFAULT_MIKHMON_INSTANCES;
+      }
+      if (!cachedDb!.mikhmonServerSettings) {
+        cachedDb!.mikhmonServerSettings = DEFAULT_MIKHMON_SERVER_CONFIG;
+      }
       if (!cachedDb!.settings) {
         cachedDb!.settings = DEFAULT_SETTINGS;
       } else {
@@ -579,11 +769,16 @@ export async function getDatabase(): Promise<DatabaseSchema> {
     automationLogs: [],
     remindersLog: [],
     adminUsers: DEFAULT_ADMIN_USERS,
+    mikhmonPlans: DEFAULT_MIKHMON_PLANS,
+    mikhmonInstances: DEFAULT_MIKHMON_INSTANCES,
+    mikhmonServerSettings: DEFAULT_MIKHMON_SERVER_CONFIG,
   };
 
   saveDatabase(cachedDb);
   return cachedDb;
+
 }
+
 
 export function saveDatabase(db: DatabaseSchema) {
   ensureDataDir();

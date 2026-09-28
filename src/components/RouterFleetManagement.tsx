@@ -32,9 +32,12 @@ import {
   ArrowUpDown,
   Download,
   Plus,
-  Trash2
+  Trash2,
+  Globe,
+  Sparkles,
+  Link as LinkIcon
 } from 'lucide-react';
-import { CustomerRecord, MikrotikConfig, PppoeActiveUser } from '../types';
+import { CustomerRecord, MikrotikConfig, PppoeActiveUser, MikhmonInstance } from '../types';
 import { formatRupiah, formatDateTimeIndo } from '../utils/formatters';
 
 interface RouterFleetManagementProps {
@@ -63,9 +66,13 @@ export const RouterFleetManagement: React.FC<RouterFleetManagementProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'connected' | 'error' | 'unsynced'>('all');
   const [protocolFilter, setProtocolFilter] = useState<'all' | 'rest' | 'api' | 'terminal' | 'push'>('all');
+  const [mikhmonFilter, setMikhmonFilter] = useState<'all' | 'mikhmon_only' | 'no_mikhmon'>('all');
   const [sortBy, setSortBy] = useState<'name' | 'sessions' | 'revenue' | 'cpu' | 'lastSync'>('sessions');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
+
+  // Mikhmon Instances from billing/cloud system
+  const [mikhmonInstances, setMikhmonInstances] = useState<MikhmonInstance[]>([]);
 
   // Batch analysis state
   const [isBatchSyncing, setIsBatchSyncing] = useState(false);
@@ -114,6 +121,10 @@ export const RouterFleetManagement: React.FC<RouterFleetManagementProps> = ({
     ratePerUser: number;
     isolirProfileName: string;
     useSsl: boolean;
+    mikhmonEnabled: boolean;
+    mikhmonUrl: string;
+    mikhmonSession: string;
+    mikhmonInstanceId: string;
   }>({
     routerName: '',
     host: '',
@@ -123,6 +134,10 @@ export const RouterFleetManagement: React.FC<RouterFleetManagementProps> = ({
     ratePerUser: 5000,
     isolirProfileName: 'isolir',
     useSsl: false,
+    mikhmonEnabled: false,
+    mikhmonUrl: '',
+    mikhmonSession: '',
+    mikhmonInstanceId: '',
   });
   const [isSavingRouter, setIsSavingRouter] = useState(false);
 
@@ -329,6 +344,10 @@ export const RouterFleetManagement: React.FC<RouterFleetManagementProps> = ({
       ratePerUser: customer.mikrotik?.ratePerUser || 5000,
       isolirProfileName: customer.mikrotik?.isolirProfileName || 'isolir',
       useSsl: customer.mikrotik?.useSsl || false,
+      mikhmonEnabled: customer.mikrotik?.mikhmonEnabled || false,
+      mikhmonUrl: customer.mikrotik?.mikhmonUrl || '',
+      mikhmonSession: customer.mikrotik?.mikhmonSession || '',
+      mikhmonInstanceId: customer.mikrotik?.mikhmonInstanceId || '',
     });
   };
 

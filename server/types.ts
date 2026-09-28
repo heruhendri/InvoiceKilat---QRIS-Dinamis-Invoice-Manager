@@ -150,6 +150,12 @@ export interface MikrotikConfig {
 
   hotspotActiveCount?: number;
   hotspotUsersCount?: number;
+
+  // Mikhmon Integration
+  mikhmonEnabled?: boolean;
+  mikhmonUrl?: string;
+  mikhmonSession?: string;
+  mikhmonInstanceId?: string;
 }
 
 export interface RecurringAddonService {
@@ -407,3 +413,134 @@ export interface AdminUserSafe {
   createdAt?: string;
   lastLoginAt?: string;
 }
+
+export interface MikhmonPlan {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  billingCycle: 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
+  maxRouters: number;
+  features: string[];
+  isPopular?: boolean;
+}
+
+export interface MikhmonInstance {
+  id: string;
+  customerId?: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  sessionName: string;
+  subdomain: string;
+  serverUrl?: string;
+  mikhmonVersion?: string;
+  adminUsername?: string;
+  adminPassword?: string;
+  planId: string;
+  planName: string;
+  price: number;
+  billingCycle: 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
+  status: 'active' | 'suspended' | 'expired' | 'pending';
+  startDate: string;
+  dueDate: string;
+  mikrotikHost?: string;
+  mikrotikPort?: number;
+  mikrotikUser?: string;
+  mikrotikPassword?: string;
+  autoInvoice: boolean;
+  autoSuspend: boolean;
+  notes?: string;
+  lastInvoiceId?: string;
+  lastInvoiceNumber?: string;
+  // Mikhmon Engine Integration Details
+  hotspotName?: string;
+  dnsName?: string;
+  currency?: string;
+  mikhmonTheme?: string;
+  mikhmonLiveStatus?: 'online' | 'offline' | 'untested';
+  mikhmonLastSyncAt?: string;
+  mikhmonPingMs?: number;
+  mikhmonActiveHotspotUsers?: number;
+  mikhmonTotalVouchers?: number;
+  mikhmonRouterIdentity?: string;
+  mikhmonRouterBoard?: string;
+  mikhmonRouterRosVersion?: string;
+  sessionConfigFileGenerated?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+
+export interface MikhmonUploadedPackage {
+  id: string;
+  fileName: string;
+  version: string;
+  fileSizeBytes: number;
+  uploadedAt: string;
+  isDefault: boolean;
+  extractedPath: string;
+  status: 'active' | 'ready' | 'extracting' | 'error';
+  notes?: string;
+}
+
+export interface MikhmonServerConfig {
+  masterDomain: string;
+  fallbackIpOrHost?: string;
+  webRootDir: string;
+  activeVersion: string;
+  phpVersion: string;
+  serverType: 'nginx_php_fpm' | 'apache' | 'docker' | 'standalone';
+  httpPort: number;
+  httpsPort: number;
+  sslProvider: 'letsencrypt' | 'cloudflare' | 'self_signed' | 'custom';
+  sslEmail: string;
+  wildcardEnabled: boolean;
+  autoCreateVhost: boolean;
+  uploadedPackages: MikhmonUploadedPackage[];
+  customNginxConfig?: string;
+  vhostNginxGenerated?: string;
+}
+
+export interface MikhmonVoucher {
+  id: string;
+  instanceId: string;
+  code: string;
+  password?: string;
+  profile: string;
+  price: number;
+  timeLimit?: string;
+  dataLimit?: string;
+  generatedAt: string;
+  status: 'active' | 'used' | 'expired';
+  batchId: string;
+  comment?: string;
+}
+
+export interface MikhmonWebserverStatus {
+  engine: string;
+  status: 'running' | 'degraded' | 'offline';
+  uptimeSeconds: number;
+  uptimeFormatted: string;
+  memoryUsageMb: number;
+  totalMemoryMb: number;
+  cpuModel: string;
+  platform: string;
+  httpPort: number;
+  httpsPort: number;
+  nodePort: number;
+  mikrotikApiPort: number;
+  activeVirtualHosts: number;
+  totalInstances: number;
+  activeInstances: number;
+  suspendedInstances: number;
+  masterDomain: string;
+  sslStatus: 'active' | 'pending' | 'self_signed';
+  phpVersion: string;
+  activePackage: string;
+  totalVouchersGenerated: number;
+  lastRestartAt: string;
+}
+
+
+

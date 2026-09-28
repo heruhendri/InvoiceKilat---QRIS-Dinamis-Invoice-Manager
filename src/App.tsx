@@ -19,7 +19,9 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 // 4. Customer Portal (Portal Mandiri Pelanggan)
 import { CustomerDirectory } from './components/CustomerDirectory';
 import { RouterFleetManagement } from './components/RouterFleetManagement';
+import { MikhmonBillingManagement } from './components/MikhmonBillingManagement';
 import { ServiceCatalog } from './components/ServiceCatalog';
+
 import { BillingAutomationCenter } from './components/BillingAutomationCenter';
 import { CustomerPortal } from './components/CustomerPortal';
 import { CustomerPortalNavbar } from './components/CustomerPortalNavbar';
@@ -952,8 +954,24 @@ export default function App() {
               />
             )}
 
+            {/* 3.6. Mikhmon Online & Hosting Billing Management */}
+            {currentTab === 'mikhmon' && (
+              <MikhmonBillingManagement
+                customers={customers}
+                invoices={invoices}
+                settings={settings}
+                onSelectInvoice={(id) => setSelectedInvoiceId(id)}
+                onOpenCreateInvoice={() => {
+                  setPreselectedCustomer(null);
+                  setEditingInvoice(null);
+                  setIsCreateModalOpen(true);
+                }}
+              />
+            )}
+
             {/* 4. Service Catalog View */}
             {currentTab === 'services' && (
+
               <ServiceCatalog
                 services={services}
                 recurringAddons={recurringAddons}

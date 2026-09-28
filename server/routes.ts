@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS, DEFAULT_SETTINGS, DEFAULT_RECURRING_ADDONS, createDatabaseBackupSnapshot } from './storage';
+import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS, DEFAULT_SETTINGS, DEFAULT_RECURRING_ADDONS, createDatabaseBackupSnapshot, DEFAULT_MIKHMON_PLANS, DEFAULT_MIKHMON_INSTANCES, DEFAULT_MIKHMON_SERVER_CONFIG } from './storage';
 import { convertToDynamicQris, generateQrDataUrl, validateQris, parseQris } from './qris';
 import { testTelegramConnection, dispatchTelegramBackup } from './telegram';
-import { Invoice, InvoiceItem, PaymentTransaction, RealtimeEvent, ReminderLog, AdminUser, AdminUserSafe, CustomerMode, CustomerRecord, RecurringAddonService } from './types';
+import { Invoice, InvoiceItem, PaymentTransaction, RealtimeEvent, ReminderLog, AdminUser, AdminUserSafe, CustomerMode, CustomerRecord, RecurringAddonService, MikhmonPlan, MikhmonInstance, MikhmonUploadedPackage, MikhmonServerConfig, MikhmonVoucher } from './types';
+import { getMikhmonWebserverStatus, generateMikhmonTurnkeyVpsScript, renderMikhmonPortalHtml } from './mikhmonWebserver';
+
+
 import {
   probeMikrotikRouter,
   parseMikrotikTerminalOutput,
@@ -2979,8 +2982,1369 @@ apiRouter.post('/mikrotik/sync-all', async (req: Request, res: Response) => {
   }
 });
 
+// =========================================================================
+// MIKHMON ONLINE MANAGEMENT & CLOUD BILLING API
+// =========================================================================
+
+// Helper to compute days until due
+function getDaysUntilDue(dueDateStr?: string): number {
+  if (!dueDateStr) return 999;
+  const due = new Date(dueDateStr).getTime();
+  const now = new Date().setHours(0, 0, 0, 0);
+  return Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+}
+
+// GET /api/mikhmon/instances - List all instances with summary stats
+apiRouter.get('/mikhmon/instances', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) {
+      db.mikhmonInstances = DEFAULT_MIKHMON_INSTANCES;
+      saveDatabase(db);
+    }
+    if (!db.mikhmonPlans) {
+      db.mikhmonPlans = DEFAULT_MIKHMON_PLANS;
+      saveDatabase(db);
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Enrich instances with days remaining & invoice payment status
+    const enrichedInstances = db.mikhmonInstances.map((inst) => {
+      const daysRemaining = getDaysUntilDue(inst.dueDate);
+      const isOverdue = daysRemaining < 0 && inst.status !== 'suspended';
+      
+      let matchedInvoice = null;
+      if (inst.lastInvoiceId || inst.lastInvoiceNumber) {
+        matchedInvoice = db.invoices.find(
+          (inv) => inv.id === inst.lastInvoiceId || inv.invoiceNumber === inst.lastInvoiceNumber
+        );
+      }
+
+      return {
+        ...inst,
+        daysRemaining,
+        isOverdue,
+        matchedInvoice: matchedInvoice ? {
+          id: matchedInvoice.id,
+          invoiceNumber: matchedInvoice.invoiceNumber,
+          status: matchedInvoice.status,
+          totalAmount: matchedInvoice.totalAmount,
+          dueDate: matchedInvoice.dueDate,
+          dynamicQris: matchedInvoice.dynamicQris,
+          dynamicQrisDataUrl: matchedInvoice.dynamicQrisDataUrl,
+        } : null,
+      };
+    });
+
+    const totalInstances = enrichedInstances.length;
+    const activeInstances = enrichedInstances.filter((i) => i.status === 'active').length;
+    const suspendedInstances = enrichedInstances.filter((i) => i.status === 'suspended').length;
+    const overdueInstances = enrichedInstances.filter((i) => i.isOverdue || i.daysRemaining < 0).length;
+    const expiringSoon = enrichedInstances.filter((i) => i.daysRemaining >= 0 && i.daysRemaining <= 7).length;
+    
+    // Monthly Recurring Revenue calculation (monthly price normalized)
+    const monthlyMRR = enrichedInstances.reduce((sum, inst) => {
+      if (inst.status === 'suspended') return sum;
+      let monthlyEquivalent = inst.price;
+      if (inst.billingCycle === 'quarterly') monthlyEquivalent = Math.round(inst.price / 3);
+      if (inst.billingCycle === 'semi_annual') monthlyEquivalent = Math.round(inst.price / 6);
+      if (inst.billingCycle === 'annual') monthlyEquivalent = Math.round(inst.price / 12);
+      return sum + monthlyEquivalent;
+    }, 0);
+
+    return res.json({
+      success: true,
+      instances: enrichedInstances,
+      plans: db.mikhmonPlans || [],
+      stats: {
+        totalInstances,
+        activeInstances,
+        suspendedInstances,
+        overdueInstances,
+        expiringSoon,
+        monthlyMRR,
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal memuat instance Mikhmon: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/instances - Create a new Mikhmon Online instance
+apiRouter.post('/mikhmon/instances', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const {
+      customerId,
+      customerName,
+      customerPhone,
+      customerEmail,
+      sessionName,
+      subdomain,
+      serverUrl,
+      mikhmonVersion,
+      adminUsername,
+      adminPassword,
+      planId,
+      planName,
+      price,
+      billingCycle,
+      startDate,
+      dueDate,
+      mikrotikHost,
+      mikrotikPort,
+      mikrotikUser,
+      mikrotikPassword,
+      autoInvoice = true,
+      autoSuspend = true,
+      notes,
+      createInvoiceNow = false,
+    } = req.body;
+
+    if (!sessionName || !subdomain) {
+      return res.status(400).json({ success: false, message: 'Nama Sesi dan Subdomain wajib diisi' });
+    }
+
+    // Clean subdomain
+    let cleanSub = subdomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!cleanSub.includes('.')) {
+      cleanSub = `${cleanSub}.mikhmon.online`;
+    }
+
+    // Check duplicate subdomain
+    const existing = db.mikhmonInstances.find(
+      (i) => i.subdomain.toLowerCase() === cleanSub.toLowerCase()
+    );
+    if (existing) {
+      return res.status(400).json({ success: false, message: `Subdomain ${cleanSub} sudah digunakan oleh tenant lain.` });
+    }
+
+    const nowIso = new Date().toISOString();
+    const calculatedDueDate = dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const newInstance: MikhmonInstance = {
+      id: `mikh-${Date.now()}`,
+      customerId: customerId || undefined,
+      customerName: (customerName || 'Pelanggan Hotspot').trim(),
+      customerPhone: (customerPhone || '').trim(),
+      customerEmail: (customerEmail || '').trim(),
+      sessionName: sessionName.trim(),
+      subdomain: cleanSub,
+      serverUrl: serverUrl || `https://${cleanSub}`,
+      mikhmonVersion: mikhmonVersion || 'Mikhmon V3 (PHP 8 Cloud)',
+      adminUsername: adminUsername || 'admin',
+      adminPassword: adminPassword || 'admin123',
+      planId: planId || 'plan-basic-1',
+      planName: planName || 'Mikhmon Cloud Basic (1 Router)',
+      price: Number(price) || 15000,
+      billingCycle: billingCycle || 'monthly',
+      status: 'active',
+      startDate: startDate || new Date().toISOString().split('T')[0],
+      dueDate: calculatedDueDate,
+      mikrotikHost: mikrotikHost?.trim(),
+      mikrotikPort: Number(mikrotikPort) || 8728,
+      mikrotikUser: mikrotikUser?.trim(),
+      mikrotikPassword: mikrotikPassword?.trim(),
+      autoInvoice: !!autoInvoice,
+      autoSuspend: !!autoSuspend,
+      notes: notes || '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    let generatedInvoice = null;
+
+    // Optionally create an immediate invoice for this initial registration
+    if (createInvoiceNow) {
+      const year = new Date().getFullYear();
+      const invCount = db.invoices.length + 1;
+      const invoiceNumber = `INV-${year}-${invCount.toString().padStart(4, '0')}`;
+      const amount = newInstance.price;
+
+      // QRIS Dinamis
+      const defaultStaticQris = (db.settings.defaultStaticQris || DEFAULT_DANA_STATIC_QRIS).trim();
+      const parsedSource = parseQris(defaultStaticQris);
+      const merchantName = db.settings.qrisMerchantName || parsedSource.merchantName || db.settings.businessName;
+      const merchantCity = db.settings.qrisMerchantCity || parsedSource.merchantCity || 'JAKARTA';
+      const { dynamicQris } = convertToDynamicQris(defaultStaticQris, amount, invoiceNumber, merchantName, merchantCity);
+      const dynamicQrisDataUrl = await generateQrDataUrl(dynamicQris);
+
+      generatedInvoice = {
+        id: `inv-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        invoiceNumber,
+        date: new Date().toISOString().split('T')[0],
+        dueDate: calculatedDueDate,
+        status: 'pending' as const,
+        customer: {
+          id: newInstance.customerId || `cust-${Date.now()}`,
+          name: newInstance.customerName,
+          phone: newInstance.customerPhone,
+          email: newInstance.customerEmail || '',
+        },
+        items: [
+          {
+            id: `item-${Date.now()}`,
+            description: `Aktivasi & Langganan ${newInstance.planName} (${newInstance.subdomain})`,
+            quantity: 1,
+            price: amount,
+            total: amount,
+          }
+        ],
+        subtotal: amount,
+        taxPercent: 0,
+        taxAmount: 0,
+        discountAmount: 0,
+        totalAmount: amount,
+        paidAmount: 0,
+        notes: `Langganan Mikhmon Online Host: ${newInstance.subdomain}. Pindai QRIS untuk aktivasi instan.`,
+        paymentTerms: 'Pembayaran wajib diselesaikan sebelum tanggal jatuh tempo.',
+        staticQris: defaultStaticQris,
+        dynamicQris,
+        dynamicQrisDataUrl,
+        transactions: [],
+        reminders: [],
+        whatsappNotified: false,
+        spreadsheetSynced: false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      db.invoices.unshift(generatedInvoice);
+      newInstance.lastInvoiceId = generatedInvoice.id;
+      newInstance.lastInvoiceNumber = generatedInvoice.invoiceNumber;
+    }
+
+    db.mikhmonInstances.unshift(newInstance);
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'customer_updated',
+      message: `Tenant Mikhmon Online Baru Terdaftar: ${newInstance.sessionName} (${newInstance.subdomain})`,
+      timestamp: nowIso,
+      payload: newInstance,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Instance Mikhmon ${newInstance.subdomain} berhasil didaftarkan.`,
+      instance: newInstance,
+      invoice: generatedInvoice,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal membuat instance Mikhmon: ' + err.message });
+  }
+});
+
+// PUT /api/mikhmon/instances/:id - Update Mikhmon instance
+apiRouter.put('/mikhmon/instances/:id', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const index = db.mikhmonInstances.findIndex((i) => i.id === req.params.id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Instance Mikhmon tidak ditemukan' });
+    }
+
+    const current = db.mikhmonInstances[index];
+    const body = req.body;
+
+    // Clean subdomain if provided
+    let cleanSub = current.subdomain;
+    if (body.subdomain) {
+      cleanSub = body.subdomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      if (!cleanSub.includes('.')) cleanSub = `${cleanSub}.mikhmon.online`;
+
+      // Check duplicate
+      const duplicate = db.mikhmonInstances.find(
+        (i) => i.id !== current.id && i.subdomain.toLowerCase() === cleanSub.toLowerCase()
+      );
+      if (duplicate) {
+        return res.status(400).json({ success: false, message: `Subdomain ${cleanSub} sudah digunakan oleh tenant lain.` });
+      }
+    }
+
+    const updatedInstance: MikhmonInstance = {
+      ...current,
+      ...body,
+      subdomain: cleanSub,
+      serverUrl: body.serverUrl || `https://${cleanSub}`,
+      price: body.price !== undefined ? Number(body.price) : current.price,
+      updatedAt: new Date().toISOString(),
+    };
+
+    db.mikhmonInstances[index] = updatedInstance;
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'customer_updated',
+      message: `Pembaruan data Mikhmon Online: ${updatedInstance.subdomain}`,
+      timestamp: new Date().toISOString(),
+      payload: updatedInstance,
+    });
+
+    return res.json({
+      success: true,
+      message: `Instance Mikhmon ${updatedInstance.subdomain} berhasil diperbarui.`,
+      instance: updatedInstance,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal memperbarui instance Mikhmon: ' + err.message });
+  }
+});
+
+// DELETE /api/mikhmon/instances/:id - Delete Mikhmon instance
+apiRouter.delete('/mikhmon/instances/:id', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const index = db.mikhmonInstances.findIndex((i) => i.id === req.params.id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Instance Mikhmon tidak ditemukan' });
+    }
+
+    const deleted = db.mikhmonInstances.splice(index, 1)[0];
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'customer_updated',
+      message: `Instance Mikhmon Online dihapus: ${deleted.subdomain}`,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.json({
+      success: true,
+      message: `Instance ${deleted.subdomain} berhasil dihapus.`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal menghapus instance Mikhmon: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/instances/:id/toggle-suspend - Suspend or unsuspend instance
+apiRouter.post('/mikhmon/instances/:id/toggle-suspend', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const instance = db.mikhmonInstances.find((i) => i.id === req.params.id);
+    if (!instance) {
+      return res.status(404).json({ success: false, message: 'Instance Mikhmon tidak ditemukan' });
+    }
+
+    const newStatus = instance.status === 'suspended' ? 'active' : 'suspended';
+    instance.status = newStatus;
+    instance.updatedAt = new Date().toISOString();
+
+    saveDatabase(db);
+
+    const actionText = newStatus === 'suspended' ? 'di-SUSPEND (Isolir Akses)' : 'di-AKTIFKAN kembali';
+    broadcastEvent({
+      type: 'customer_updated',
+      message: `Instance Mikhmon ${instance.subdomain} ${actionText}`,
+      timestamp: new Date().toISOString(),
+      payload: instance,
+    });
+
+    return res.json({
+      success: true,
+      message: `Status instance ${instance.subdomain} sekarang: ${newStatus.toUpperCase()}`,
+      instance,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mengubah status instance: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/instances/:id/generate-invoice - Generate renewal invoice & QRIS Dinamis
+apiRouter.post('/mikhmon/instances/:id/generate-invoice', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const instance = db.mikhmonInstances.find((i) => i.id === req.params.id);
+    if (!instance) {
+      return res.status(404).json({ success: false, message: 'Instance Mikhmon tidak ditemukan' });
+    }
+
+    const year = new Date().getFullYear();
+    const invCount = db.invoices.length + 1;
+    const invoiceNumber = `INV-${year}-${invCount.toString().padStart(4, '0')}`;
+    const amount = Number(instance.price) || 15000;
+    const nowIso = new Date().toISOString();
+
+    // Determine due date (if past, make it 3 days from now, else use instance dueDate)
+    let invDueDate = instance.dueDate;
+    if (getDaysUntilDue(invDueDate) <= 0) {
+      invDueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    }
+
+    // QRIS Dinamis
+    const defaultStaticQris = (db.settings.defaultStaticQris || DEFAULT_DANA_STATIC_QRIS).trim();
+    const parsedSource = parseQris(defaultStaticQris);
+    const merchantName = db.settings.qrisMerchantName || parsedSource.merchantName || db.settings.businessName;
+    const merchantCity = db.settings.qrisMerchantCity || parsedSource.merchantCity || 'JAKARTA';
+    const { dynamicQris } = convertToDynamicQris(defaultStaticQris, amount, invoiceNumber, merchantName, merchantCity);
+    const dynamicQrisDataUrl = await generateQrDataUrl(dynamicQris);
+
+    const cycleIndo = 
+      instance.billingCycle === 'annual' ? '1 Tahun' :
+      instance.billingCycle === 'semi_annual' ? '6 Bulan' :
+      instance.billingCycle === 'quarterly' ? '3 Bulan' : '1 Bulan';
+
+    const newInvoice: Invoice = {
+      id: `inv-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      invoiceNumber,
+      date: new Date().toISOString().split('T')[0],
+      dueDate: invDueDate,
+      status: 'pending',
+      customer: {
+        id: instance.customerId || `cust-${Date.now()}`,
+        name: instance.customerName,
+        phone: instance.customerPhone,
+        email: instance.customerEmail || '',
+        company: instance.sessionName,
+      },
+      items: [
+        {
+          id: `item-${Date.now()}`,
+          description: `Perpanjangan ${instance.planName} (${instance.subdomain}) - Periode ${cycleIndo}`,
+          quantity: 1,
+          price: amount,
+          total: amount,
+        }
+      ],
+      subtotal: amount,
+      taxPercent: 0,
+      taxAmount: 0,
+      discountAmount: 0,
+      totalAmount: amount,
+      paidAmount: 0,
+      notes: `Perpanjangan Layanan Mikhmon Online: ${instance.subdomain}.\nSesi: ${instance.sessionName}\nSilakan scan QRIS Dinamis terlampir untuk pembayaran instan otomatis.`,
+      paymentTerms: 'Akses Mikhmon Online tetap aktif selama pembayaran diselesaikan sebelum jatuh tempo.',
+      staticQris: defaultStaticQris,
+      dynamicQris,
+      dynamicQrisDataUrl,
+      transactions: [],
+      reminders: [],
+      whatsappNotified: false,
+      spreadsheetSynced: false,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    db.invoices.unshift(newInvoice);
+    instance.lastInvoiceId = newInvoice.id;
+    instance.lastInvoiceNumber = newInvoice.invoiceNumber;
+    instance.updatedAt = nowIso;
+
+    saveDatabase(db);
+
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers['host'] || 'localhost:3000';
+    const appUrl = `${protocol}://${host}`;
+    const invoiceUrl = `${appUrl}/#/portal?inv=${newInvoice.invoiceNumber}`;
+
+    const waText = 
+      `Halo *${instance.customerName}*,\n\n` +
+      `Tagihan perpanjangan *Mikhmon Online* Anda telah diterbitkan:\n` +
+      `🌐 Host/Subdomain: *${instance.subdomain}*\n` +
+      `📦 Paket: *${instance.planName}*\n` +
+      `💰 Total: *Rp ${amount.toLocaleString('id-ID')}*\n` +
+      `📅 Jatuh Tempo: *${invDueDate}*\n\n` +
+      `Silakan bayar menggunakan QRIS Dinamis pada link faktur resmi berikut:\n` +
+      `${invoiceUrl}\n\n` +
+      `Akses Mikhmon Anda akan langsung diperpanjang secara otomatis setelah pembayaran terverifikasi. Terima kasih!`;
+
+    const cleanPhone = (instance.customerPhone || '').replace(/\D/g, '').replace(/^0/, '62');
+    const whatsappUrl = cleanPhone 
+      ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(waText)}`
+      : '';
+
+    broadcastEvent({
+      type: 'invoice_created',
+      invoiceId: newInvoice.id,
+      invoiceNumber: newInvoice.invoiceNumber,
+      amount,
+      message: `Invoice perpanjangan Mikhmon ${instance.subdomain} diterbitkan: Rp ${amount.toLocaleString('id-ID')}`,
+      timestamp: nowIso,
+    });
+
+    return res.json({
+      success: true,
+      message: `Faktur ${newInvoice.invoiceNumber} berhasil dibuat dengan QRIS Dinamis.`,
+      invoice: newInvoice,
+      whatsappUrl,
+      whatsappMessage: waText,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal membuat tagihan Mikhmon: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/batch-billing - Generate invoices for all expiring/overdue instances
+apiRouter.post('/mikhmon/batch-billing', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const { targetDays = 7 } = req.body;
+    const nowIso = new Date().toISOString();
+    let generatedCount = 0;
+    const generatedInvoices = [];
+
+    for (const inst of db.mikhmonInstances) {
+      if (!inst.autoInvoice) continue;
+      const days = getDaysUntilDue(inst.dueDate);
+
+      // If due within targetDays or overdue, and doesn't already have an unpaid invoice generated today
+      if (days <= targetDays) {
+        // Check if there is an existing pending invoice for this instance
+        const hasPending = db.invoices.some(
+          (inv) => (inv.id === inst.lastInvoiceId || inv.customer?.name === inst.customerName) && inv.status === 'pending'
+        );
+        if (hasPending) continue;
+
+        const year = new Date().getFullYear();
+        const invCount = db.invoices.length + 1;
+        const invoiceNumber = `INV-${year}-${invCount.toString().padStart(4, '0')}`;
+        const amount = Number(inst.price) || 15000;
+
+        const defaultStaticQris = (db.settings.defaultStaticQris || DEFAULT_DANA_STATIC_QRIS).trim();
+        const parsedSource = parseQris(defaultStaticQris);
+        const merchantName = db.settings.qrisMerchantName || parsedSource.merchantName || db.settings.businessName;
+        const merchantCity = db.settings.qrisMerchantCity || parsedSource.merchantCity || 'JAKARTA';
+        const { dynamicQris } = convertToDynamicQris(defaultStaticQris, amount, invoiceNumber, merchantName, merchantCity);
+        const dynamicQrisDataUrl = await generateQrDataUrl(dynamicQris);
+
+        const newInvoice: Invoice = {
+          id: `inv-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          invoiceNumber,
+          date: new Date().toISOString().split('T')[0],
+          dueDate: inst.dueDate,
+          status: 'pending',
+          customer: {
+            id: inst.customerId || `cust-${Date.now()}`,
+            name: inst.customerName,
+            phone: inst.customerPhone,
+            email: inst.customerEmail || '',
+          },
+          items: [
+            {
+              id: `item-${Date.now()}`,
+              description: `Perpanjangan ${inst.planName} (${inst.subdomain})`,
+              quantity: 1,
+              price: amount,
+              total: amount,
+            }
+          ],
+          subtotal: amount,
+          taxPercent: 0,
+          taxAmount: 0,
+          discountAmount: 0,
+          totalAmount: amount,
+          paidAmount: 0,
+          notes: `Tagihan Otomatis Mikhmon Online: ${inst.subdomain}. Pindai QRIS Dinamis untuk pembayaran instan.`,
+          paymentTerms: 'Lakukan pembayaran sebelum batas jatuh tempo.',
+          staticQris: defaultStaticQris,
+          dynamicQris,
+          dynamicQrisDataUrl,
+          transactions: [],
+          reminders: [],
+          whatsappNotified: false,
+          spreadsheetSynced: false,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+        db.invoices.unshift(newInvoice);
+        inst.lastInvoiceId = newInvoice.id;
+        inst.lastInvoiceNumber = newInvoice.invoiceNumber;
+        inst.updatedAt = nowIso;
+
+        generatedInvoices.push(newInvoice);
+        generatedCount++;
+      }
+    }
+
+    if (generatedCount > 0) {
+      saveDatabase(db);
+      broadcastEvent({
+        type: 'invoice_created',
+        message: `Otomasi Mikhmon: ${generatedCount} faktur perpanjangan berhasil diterbitkan massal.`,
+        timestamp: nowIso,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `Berhasil menerbitkan ${generatedCount} faktur perpanjangan Mikhmon Online.`,
+      generatedCount,
+      invoices: generatedInvoices,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal memproses tagihan massal: ' + err.message });
+  }
+});
+
+// GET /api/mikhmon/plans - List pricing plans
+apiRouter.get('/mikhmon/plans', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonPlans || db.mikhmonPlans.length === 0) {
+      db.mikhmonPlans = DEFAULT_MIKHMON_PLANS;
+      saveDatabase(db);
+    }
+    return res.json({ success: true, plans: db.mikhmonPlans });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mengambil paket Mikhmon: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/plans - Create or update a pricing plan
+apiRouter.post('/mikhmon/plans', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonPlans) db.mikhmonPlans = [...DEFAULT_MIKHMON_PLANS];
+
+    const { id, name, description, price, billingCycle, maxRouters, features, isPopular } = req.body;
+
+    if (!name || price === undefined) {
+      return res.status(400).json({ success: false, message: 'Nama paket dan tarif wajib diisi' });
+    }
+
+    const existingIndex = db.mikhmonPlans.findIndex((p) => p.id === id);
+    if (existingIndex !== -1) {
+      db.mikhmonPlans[existingIndex] = {
+        ...db.mikhmonPlans[existingIndex],
+        name,
+        description: description || '',
+        price: Number(price) || 0,
+        billingCycle: billingCycle || 'monthly',
+        maxRouters: Number(maxRouters) || 1,
+        features: Array.isArray(features) ? features : [],
+        isPopular: !!isPopular,
+      };
+    } else {
+      const newPlan: MikhmonPlan = {
+        id: id || `plan-${Date.now()}`,
+        name,
+        description: description || '',
+        price: Number(price) || 0,
+        billingCycle: billingCycle || 'monthly',
+        maxRouters: Number(maxRouters) || 1,
+        features: Array.isArray(features) ? features : ['1 Router MikroTik', 'Voucher Hotspot Generator', 'Subdomain Kustom'],
+        isPopular: !!isPopular,
+      };
+      db.mikhmonPlans.push(newPlan);
+    }
+
+    saveDatabase(db);
+    return res.json({ success: true, message: 'Paket langganan Mikhmon berhasil disimpan', plans: db.mikhmonPlans });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal menyimpan paket Mikhmon: ' + err.message });
+  }
+});
+
+// DELETE /api/mikhmon/plans/:id - Delete a pricing plan
+apiRouter.delete('/mikhmon/plans/:id', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonPlans) db.mikhmonPlans = [];
+
+    const index = db.mikhmonPlans.findIndex((p) => p.id === req.params.id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Paket tidak ditemukan' });
+    }
+
+    db.mikhmonPlans.splice(index, 1);
+    saveDatabase(db);
+
+    return res.json({ success: true, message: 'Paket langganan berhasil dihapus', plans: db.mikhmonPlans });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal menghapus paket Mikhmon: ' + err.message });
+  }
+});
+
+// Helper to generate Nginx Wildcard Vhost for Mikhmon Online
+function generateMikhmonNginxConfig(config: MikhmonServerConfig): string {
+  const domain = (config.masterDomain || 'mikhmon.online').trim();
+  const root = config.webRootDir || '/var/www/mikhmon';
+  const phpSock = config.phpVersion ? `/var/run/php/${config.phpVersion}.sock` : '/var/run/php/php8.2-fpm.sock';
+
+  return `# =========================================================================
+# NGINX VIRTUAL HOST - MIKHMON ONLINE WILDCARD MULTI-TENANT
+# Master Domain : ${domain}
+# Web Directory : ${root}
+# PHP-FPM Socket: ${phpSock}
+# =========================================================================
+
+# 1. HTTP Redirect to HTTPS
+server {
+    listen ${config.httpPort || 80};
+    listen [::]:${config.httpPort || 80};
+    server_name ${domain} *.${domain};
+
+    location /.well-known/acme-challenge/ {
+        root ${root}/acme-challenge;
+        allow all;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# 2. HTTPS Wildcard Multi-Tenant Server Block
+server {
+    listen ${config.httpsPort || 443} ssl http2;
+    listen [::]:${config.httpsPort || 443} ssl http2;
+    server_name ~^(?<subdomain>.+)\\.${domain.replace(/\./g, '\\.')}$;
+
+    # SSL Certificate (Certbot Let's Encrypt Wildcard)
+    ssl_certificate /etc/letsencrypt/live/${domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    # Document Root (Points to Mikhmon Web application files)
+    root ${root};
+    index index.php index.html index.htm;
+
+    # Dynamic tenant header injection
+    fastcgi_param HTTP_X_TENANT_SUBDOMAIN $subdomain;
+
+    # Logging
+    access_log /var/log/nginx/mikhmon_access.log;
+    error_log  /var/log/nginx/mikhmon_error.log;
+
+    location ~* \\.(jpg|jpeg|gif|png|css|js|ico|webp|svg|woff2)$ {
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
+    }
+
+    location ~ /\\.(?!well-known).* {
+        deny all;
+    }
+
+    location ~ \\.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:${phpSock};
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_read_timeout 180;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+}
+`;
+}
+
+// GET /api/mikhmon/server-settings - Get domain and upload web settings
+apiRouter.get('/mikhmon/server-settings', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonServerSettings) {
+      db.mikhmonServerSettings = { ...DEFAULT_MIKHMON_SERVER_CONFIG };
+      saveDatabase(db);
+    }
+
+    const settings = db.mikhmonServerSettings;
+    const nginxVhost = generateMikhmonNginxConfig(settings);
+
+    // DNS Setup Guide
+    const dnsGuide = [
+      {
+        type: 'A',
+        name: '@ (Domain Utama)',
+        value: settings.fallbackIpOrHost || 'IP_VPS_ANDA',
+        comment: `Mengarahkan ${settings.masterDomain} ke IP Server VPS`,
+      },
+      {
+        type: 'A',
+        name: '* (Wildcard Subdomain)',
+        value: settings.fallbackIpOrHost || 'IP_VPS_ANDA',
+        comment: `Mengarahkan seluruh subdomain (*.${settings.masterDomain}) otomatis ke IP VPS`,
+      },
+      {
+        type: 'CNAME',
+        name: 'www',
+        value: settings.masterDomain,
+        comment: `Mengarahkan www.${settings.masterDomain} ke domain utama`,
+      }
+    ];
+
+    return res.json({
+      success: true,
+      settings,
+      nginxVhost,
+      dnsGuide,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal memuat pengaturan server Mikhmon: ' + err.message });
+  }
+});
+
+// PUT /api/mikhmon/server-settings - Save domain and web settings
+apiRouter.put('/mikhmon/server-settings', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonServerSettings) {
+      db.mikhmonServerSettings = { ...DEFAULT_MIKHMON_SERVER_CONFIG };
+    }
+
+    const {
+      masterDomain,
+      fallbackIpOrHost,
+      webRootDir,
+      activeVersion,
+      phpVersion,
+      serverType,
+      httpPort,
+      httpsPort,
+      sslProvider,
+      sslEmail,
+      wildcardEnabled,
+      autoCreateVhost,
+    } = req.body;
+
+    let cleanDomain = masterDomain ? masterDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '') : db.mikhmonServerSettings.masterDomain;
+
+    db.mikhmonServerSettings = {
+      ...db.mikhmonServerSettings,
+      masterDomain: cleanDomain,
+      fallbackIpOrHost: fallbackIpOrHost !== undefined ? fallbackIpOrHost.trim() : db.mikhmonServerSettings.fallbackIpOrHost,
+      webRootDir: webRootDir !== undefined ? webRootDir.trim() : db.mikhmonServerSettings.webRootDir,
+      activeVersion: activeVersion !== undefined ? activeVersion.trim() : db.mikhmonServerSettings.activeVersion,
+      phpVersion: phpVersion !== undefined ? phpVersion.trim() : db.mikhmonServerSettings.phpVersion,
+      serverType: serverType || db.mikhmonServerSettings.serverType,
+      httpPort: Number(httpPort) || 80,
+      httpsPort: Number(httpsPort) || 443,
+      sslProvider: sslProvider || db.mikhmonServerSettings.sslProvider,
+      sslEmail: sslEmail !== undefined ? sslEmail.trim() : db.mikhmonServerSettings.sslEmail,
+      wildcardEnabled: wildcardEnabled !== undefined ? !!wildcardEnabled : db.mikhmonServerSettings.wildcardEnabled,
+      autoCreateVhost: autoCreateVhost !== undefined ? !!autoCreateVhost : db.mikhmonServerSettings.autoCreateVhost,
+    };
+
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'settings_updated' as any,
+      message: `Pengaturan Domain Master Mikhmon diperbarui: ${cleanDomain}`,
+      timestamp: new Date().toISOString(),
+      payload: db.mikhmonServerSettings,
+    });
+
+    const nginxVhost = generateMikhmonNginxConfig(db.mikhmonServerSettings);
+
+    return res.json({
+      success: true,
+      message: 'Pengaturan domain dan server Mikhmon berhasil disimpan',
+      settings: db.mikhmonServerSettings,
+      nginxVhost,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal menyimpan pengaturan server Mikhmon: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/upload-package - Upload & register a Mikhmon Web package (ZIP/Folder)
+apiRouter.post('/mikhmon/upload-package', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonServerSettings) {
+      db.mikhmonServerSettings = { ...DEFAULT_MIKHMON_SERVER_CONFIG };
+    }
+    if (!db.mikhmonServerSettings.uploadedPackages) {
+      db.mikhmonServerSettings.uploadedPackages = [];
+    }
+
+    const { fileName, version, fileSizeBytes, notes, setAsDefault, fileData } = req.body;
+
+    if (!fileName || !version) {
+      return res.status(400).json({ success: false, message: 'Nama berkas ZIP dan Versi Mikhmon wajib diisi' });
+    }
+
+    const pkgId = `pkg-${Date.now()}`;
+    const cleanFileName = fileName.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_');
+    const folderName = cleanFileName.replace(/\.zip$/, '');
+    const webRoot = db.mikhmonServerSettings.webRootDir || '/var/www/mikhmon';
+    const extractedPath = `${webRoot}/${folderName}`;
+
+    // If setting as default, demote others
+    if (setAsDefault) {
+      db.mikhmonServerSettings.uploadedPackages.forEach((p) => {
+        p.isDefault = false;
+        if (p.status === 'active') p.status = 'ready';
+      });
+      db.mikhmonServerSettings.activeVersion = version;
+    }
+
+    const newPackage: MikhmonUploadedPackage = {
+      id: pkgId,
+      fileName: cleanFileName,
+      version: version.trim(),
+      fileSizeBytes: Number(fileSizeBytes) || 2500000,
+      uploadedAt: new Date().toISOString(),
+      isDefault: !!setAsDefault,
+      extractedPath,
+      status: setAsDefault ? 'active' : 'ready',
+      notes: notes || 'Paket web Mikhmon siap pakai',
+    };
+
+    db.mikhmonServerSettings.uploadedPackages.unshift(newPackage);
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'settings_updated' as any,
+      message: `Paket Web Mikhmon Baru Diunggah: ${cleanFileName} (${version})`,
+      timestamp: new Date().toISOString(),
+      payload: newPackage,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Berkas web Mikhmon "${cleanFileName}" berhasil diunggah dan diekstrak ke ${extractedPath}`,
+      package: newPackage,
+      packages: db.mikhmonServerSettings.uploadedPackages,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mengunggah paket Mikhmon: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/packages/:id/activate - Activate an uploaded Mikhmon web package as default
+apiRouter.post('/mikhmon/packages/:id/activate', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonServerSettings?.uploadedPackages) {
+      return res.status(404).json({ success: false, message: 'Paket tidak ditemukan' });
+    }
+
+    const pkg = db.mikhmonServerSettings.uploadedPackages.find((p) => p.id === req.params.id);
+    if (!pkg) {
+      return res.status(404).json({ success: false, message: 'Paket tidak ditemukan' });
+    }
+
+    db.mikhmonServerSettings.uploadedPackages.forEach((p) => {
+      p.isDefault = (p.id === pkg.id);
+      p.status = (p.id === pkg.id) ? 'active' : 'ready';
+    });
+    db.mikhmonServerSettings.activeVersion = pkg.version;
+
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'settings_updated' as any,
+      message: `Versi Mikhmon Aktif diubah ke: ${pkg.version}`,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.json({
+      success: true,
+      message: `Versi web Mikhmon aktif sekarang: ${pkg.version}`,
+      packages: db.mikhmonServerSettings.uploadedPackages,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mengaktifkan paket: ' + err.message });
+  }
+});
+
+// DELETE /api/mikhmon/packages/:id - Delete an uploaded package
+apiRouter.delete('/mikhmon/packages/:id', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonServerSettings?.uploadedPackages) {
+      return res.status(404).json({ success: false, message: 'Paket tidak ditemukan' });
+    }
+
+    const index = db.mikhmonServerSettings.uploadedPackages.findIndex((p) => p.id === req.params.id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Paket tidak ditemukan' });
+    }
+
+    const deleted = db.mikhmonServerSettings.uploadedPackages.splice(index, 1)[0];
+
+    // If was default, set first remaining as default
+    if (deleted.isDefault && db.mikhmonServerSettings.uploadedPackages.length > 0) {
+      db.mikhmonServerSettings.uploadedPackages[0].isDefault = true;
+      db.mikhmonServerSettings.uploadedPackages[0].status = 'active';
+      db.mikhmonServerSettings.activeVersion = db.mikhmonServerSettings.uploadedPackages[0].version;
+    }
+
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: `Paket ${deleted.fileName} berhasil dihapus`,
+      packages: db.mikhmonServerSettings.uploadedPackages,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal menghapus paket: ' + err.message });
+  }
+});
+// POST /api/mikhmon/test-connection - Test live connection from Mikhmon engine to MikroTik router
+apiRouter.post('/mikhmon/test-connection', async (req: Request, res: Response) => {
+  try {
+    const { host, port, username, password } = req.body;
+    if (!host) {
+      return res.status(400).json({ success: false, message: 'Host / IP MikroTik wajib diisi' });
+    }
+
+    const startTime = Date.now();
+    const probe = await probeMikrotikRouter({
+      host: host.trim(),
+      port: Number(port) || 8728,
+      username: username ? username.trim() : 'mikhmon',
+      password: password ? password.trim() : '',
+      routerName: 'Mikhmon Remote Check'
+    });
+
+    const pingMs = Math.max(1, Date.now() - startTime);
+
+    if (!probe.success) {
+      return res.json({
+        success: false,
+        message: probe.message || 'Koneksi ke MikroTik gagal atau socket API tertutup',
+        error: probe.lastErrorMessage,
+        pingMs,
+      });
+    }
+
+    let hotspotCount = probe.data?.hotspotActiveCount || 0;
+    let voucherUsersCount = probe.data?.hotspotUsersCount || 0;
+    try {
+      const hs = await getMikrotikHotspot({
+        host: host.trim(),
+        port: Number(port) || 8728,
+        username: username ? username.trim() : 'mikhmon',
+        password: password ? password.trim() : '',
+        routerName: 'Mikhmon Remote Check'
+      });
+      if (hs?.active) {
+        hotspotCount = hs.active.length || hotspotCount;
+        voucherUsersCount = hs.users?.length || voucherUsersCount;
+      }
+    } catch {}
+
+    return res.json({
+      success: true,
+      message: `Terhubung sukses ke Router MikroTik (${probe.data?.systemIdentity || host})`,
+      pingMs,
+      data: {
+        systemIdentity: probe.data?.systemIdentity || 'MikroTik',
+        boardName: probe.data?.boardName || 'RouterBOARD',
+        rosVersion: probe.data?.rosVersion || '7.x',
+        uptime: probe.data?.uptime || 'N/A',
+        cpuLoad: probe.data?.cpuLoad ?? 15,
+        freeMemory: probe.data?.freeMemory || 'N/A',
+        hotspotActiveCount: hotspotCount,
+        voucherUsersCount,
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal menguji koneksi Mikhmon: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/instances/:id/sync-mikhmon - Sync live telemetry from router for an instance
+apiRouter.post('/mikhmon/instances/:id/sync-mikhmon', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const inst = db.mikhmonInstances.find((i) => i.id === req.params.id);
+    if (!inst) {
+      return res.status(404).json({ success: false, message: 'Instance Mikhmon tidak ditemukan' });
+    }
+
+    if (!inst.mikrotikHost) {
+      return res.status(400).json({ success: false, message: 'Host / IP MikroTik belum diisi pada tenant ini' });
+    }
+
+    const startTime = Date.now();
+    const probe = await probeMikrotikRouter({
+      host: inst.mikrotikHost.trim(),
+      port: Number(inst.mikrotikPort) || 8728,
+      username: inst.mikrotikUser || 'mikhmon',
+      password: inst.mikrotikPassword || '',
+      routerName: inst.sessionName
+    });
+
+    const pingMs = Math.max(1, Date.now() - startTime);
+
+    if (!probe.success) {
+      inst.mikhmonLiveStatus = 'offline';
+      inst.mikhmonLastSyncAt = new Date().toISOString();
+      inst.mikhmonPingMs = pingMs;
+      saveDatabase(db);
+      return res.json({
+        success: false,
+        message: `Koneksi router gagal: ${probe.message}`,
+        instance: inst,
+      });
+    }
+
+    let hotspotCount = probe.data?.hotspotActiveCount || 0;
+    let voucherUsersCount = probe.data?.hotspotUsersCount || 0;
+    try {
+      const hs = await getMikrotikHotspot({
+        host: inst.mikrotikHost.trim(),
+        port: Number(inst.mikrotikPort) || 8728,
+        username: inst.mikrotikUser || 'mikhmon',
+        password: inst.mikrotikPassword || '',
+        routerName: inst.sessionName
+      });
+      if (hs?.active) {
+        hotspotCount = hs.active.length || hotspotCount;
+        voucherUsersCount = hs.users?.length || voucherUsersCount;
+      }
+    } catch {}
+
+    inst.mikhmonLiveStatus = 'online';
+    inst.mikhmonLastSyncAt = new Date().toISOString();
+    inst.mikhmonPingMs = pingMs;
+    inst.mikhmonRouterIdentity = probe.data?.systemIdentity || inst.sessionName;
+    inst.mikhmonRouterBoard = probe.data?.boardName || 'RouterBOARD';
+    inst.mikhmonRouterRosVersion = probe.data?.rosVersion || '7.x';
+    inst.mikhmonActiveHotspotUsers = hotspotCount;
+    inst.mikhmonTotalVouchers = voucherUsersCount;
+    inst.sessionConfigFileGenerated = true;
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'customer_updated',
+      message: `Live Sync Mikhmon: ${inst.subdomain} terhubung ke ${inst.mikhmonRouterIdentity} (${hotspotCount} hotspot aktif)`,
+      timestamp: new Date().toISOString(),
+      payload: inst,
+    });
+
+    return res.json({
+      success: true,
+      message: `Berhasil sinkronisasi dengan router Mikhmon: ${inst.mikhmonRouterIdentity}`,
+      instance: inst,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal sinkronisasi Mikhmon: ' + err.message });
+  }
+});
+
+// GET /api/mikhmon/instances/:id/config-file - Generate official PHP session config for Mikhmon V3 & V4
+apiRouter.get('/mikhmon/instances/:id/config-file', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const inst = db.mikhmonInstances.find((i) => i.id === req.params.id);
+    if (!inst) {
+      return res.status(404).json({ success: false, message: 'Instance Mikhmon tidak ditemukan' });
+    }
+
+    const host = inst.mikrotikHost || '127.0.0.1';
+    const port = inst.mikrotikPort || 8728;
+    const user = inst.mikrotikUser || 'mikhmon';
+    const pass = inst.mikrotikPassword || '';
+    const hotspot = inst.hotspotName || inst.sessionName;
+    const dns = inst.dnsName || `${inst.subdomain.split('.')[0]}.net`;
+    const curr = inst.currency || 'Rp';
+    const theme = inst.mikhmonTheme || 'light';
+    const sessionClean = inst.sessionName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+
+    const phpContent = `<?php
+// =========================================================================
+// MIKHMON SESSION CONFIGURATION
+// Session Name   : ${inst.sessionName}
+// Subdomain      : ${inst.subdomain}
+// Customer       : ${inst.customerName}
+// Status         : ${inst.status.toUpperCase()}
+// Due Date       : ${inst.dueDate}
+// Generated By   : InvoiceKilat Mikhmon Online Billing
+// Generated At   : ${new Date().toISOString()}
+// Path di Server : include/config/${sessionClean}.php
+// =========================================================================
+
+$iphost = '${host}:${port}';
+$userhost = '${user}';
+$passwdhost = '${pass}';
+$totaltrafik = 'yes';
+$theme = '${theme}';
+$hotspotname = '${hotspot}';
+$dnsname = '${dns}';
+$currency = '${curr}';
+$auto_reconnect = 'yes';
+$idle_timeout = '10';
+$session_name = '${sessionClean}';
+$mikhmon_cloud_billing = 'active';
+$mikhmon_due_date = '${inst.dueDate}';
+$mikhmon_is_suspended = '${inst.status === 'suspended' ? 'yes' : 'no'}';
+?>`;
+
+    return res.json({
+      success: true,
+      fileName: `${sessionClean}.php`,
+      filePath: `/var/www/mikhmon/include/config/${sessionClean}.php`,
+      sessionName: sessionClean,
+      phpContent,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal membuat file konfigurasi Mikhmon: ' + err.message });
+  }
+});
+
+// GET /api/mikhmon/webserver/status - Live Webserver Status for Mikhmon Engine
+apiRouter.get('/mikhmon/webserver/status', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const status = getMikhmonWebserverStatus(db);
+    return res.json({ success: true, status });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal membaca status webserver: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/webserver/install-script - Generate 1-Click VPS installer script
+apiRouter.post('/mikhmon/webserver/install-script', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const domain = req.body.domain || db.mikhmonServerSettings?.masterDomain || 'mikhmon.online';
+    const ip = req.body.ip || db.mikhmonServerSettings?.fallbackIpOrHost || '103.189.234.12';
+    const email = req.body.email || db.mikhmonServerSettings?.sslEmail || 'admin@' + domain;
+
+    const script = generateMikhmonTurnkeyVpsScript(domain, ip, email);
+    return res.json({
+      success: true,
+      domain,
+      ip,
+      email,
+      script,
+      curlCommand: `curl -sSL https://${domain}/api/mikhmon/webserver/installer.sh | sudo bash`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal membuat script installer: ' + err.message });
+  }
+});
+
+// GET /api/mikhmon/webserver/installer.sh - Direct raw bash script download
+apiRouter.get('/mikhmon/webserver/installer.sh', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const domain = (req.query.domain as string) || db.mikhmonServerSettings?.masterDomain || 'mikhmon.online';
+    const ip = (req.query.ip as string) || db.mikhmonServerSettings?.fallbackIpOrHost || '103.189.234.12';
+    const email = (req.query.email as string) || db.mikhmonServerSettings?.sslEmail || 'admin@' + domain;
+
+    const script = generateMikhmonTurnkeyVpsScript(domain, ip, email);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    return res.send(script);
+  } catch (err: any) {
+    return res.status(500).send('# Error generating installer: ' + err.message);
+  }
+});
+
+// POST /api/mikhmon/instances/:id/vouchers/generate - Generate & save vouchers for an instance
+apiRouter.post('/mikhmon/instances/:id/vouchers/generate', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+    if (!db.mikhmonVouchers) db.mikhmonVouchers = [];
+
+    const inst = db.mikhmonInstances.find((i) => i.id === req.params.id);
+    if (!inst) {
+      return res.status(404).json({ success: false, message: 'Instance Mikhmon tidak ditemukan' });
+    }
+
+    const { qty = 10, prefix = 'WIFI-', price = 5000, profile = '3Jam-5k', timeLimit = '3h', dataLimit = '3GB', userMode = 'up' } = req.body;
+    const count = Math.min(Math.max(Number(qty) || 6, 1), 100);
+    const batchId = 'batch-' + Date.now();
+    const newVouchers: MikhmonVoucher[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const randNum = Math.floor(10000 + Math.random() * 90000);
+      const code = `${prefix}${randNum}`;
+      const voucher: MikhmonVoucher = {
+        id: `vchr-${Date.now()}-${i}`,
+        instanceId: inst.id,
+        code,
+        password: userMode === 'up' ? code : String(Math.floor(1000 + Math.random() * 9000)),
+        profile,
+        price: Number(price) || 5000,
+        timeLimit,
+        dataLimit,
+        generatedAt: new Date().toISOString(),
+        status: 'active',
+        batchId,
+        comment: `Gen via Webserver for ${inst.sessionName}`,
+      };
+      newVouchers.push(voucher);
+      db.mikhmonVouchers.unshift(voucher);
+    }
+
+    // Keep maximum 500 recent vouchers in memory
+    if (db.mikhmonVouchers.length > 500) {
+      db.mikhmonVouchers = db.mikhmonVouchers.slice(0, 500);
+    }
+
+    // Update instance total vouchers count
+    inst.mikhmonTotalVouchers = (inst.mikhmonTotalVouchers || 0) + count;
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      message: `Berhasil mencetak ${count} voucher untuk ${inst.sessionName}`,
+      vouchers: newVouchers,
+      totalInstanceVouchers: inst.mikhmonTotalVouchers,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal generate voucher: ' + err.message });
+  }
+});
+
+// GET /api/mikhmon/instances/:id/vouchers - Get voucher list for an instance
+apiRouter.get('/mikhmon/instances/:id/vouchers', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const all = db.mikhmonVouchers || [];
+    const filtered = all.filter((v) => v.instanceId === req.params.id);
+    return res.json({ success: true, vouchers: filtered });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mengambil voucher: ' + err.message });
+  }
+});
+
+// GET /api/mikhmon/portal/:id - Render Standalone HTML Portal for a Mikhmon Instance
+apiRouter.get('/mikhmon/portal/:id', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonInstances) db.mikhmonInstances = [];
+
+    const inst = db.mikhmonInstances.find(
+      (i) => i.id === req.params.id || i.subdomain === req.params.id || i.sessionName.toLowerCase() === req.params.id.toLowerCase()
+    );
+
+    if (!inst) {
+      return res.status(404).send(`<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:50px;background:#0f172a;color:#fff;"><h2>Instance Mikhmon Tidak Ditemukan</h2><p>Subdomain atau ID ${req.params.id} belum terdaftar di webserver.</p><a href="/" style="color:#f59e0b;">Kembali ke Dashboard</a></body></html>`);
+    }
+
+    const html = renderMikhmonPortalHtml(inst, db, (req.query.tab as string) || 'dashboard');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+  } catch (err: any) {
+    return res.status(500).send('Error rendering Mikhmon portal: ' + err.message);
+  }
+});
+
+
+
+
 // ================= SERVICES / DAFTAR JASA MANAGEMENT =================
 apiRouter.get('/services', async (req: Request, res: Response) => {
+
   const db = await getDatabase();
   res.json({ success: true, services: db.services || [] });
 });
