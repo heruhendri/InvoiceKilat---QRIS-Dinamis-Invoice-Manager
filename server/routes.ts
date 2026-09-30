@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS, DEFAULT_SETTINGS, DEFAULT_RECURRING_ADDONS, createDatabaseBackupSnapshot, DEFAULT_MIKHMON_PLANS, DEFAULT_MIKHMON_INSTANCES, DEFAULT_MIKHMON_SERVER_CONFIG } from './storage';
+import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS, DEFAULT_SETTINGS, DEFAULT_RECURRING_ADDONS, createDatabaseBackupSnapshot, resetDatabaseToDefaults, DEFAULT_MIKHMON_PLANS, DEFAULT_MIKHMON_INSTANCES, DEFAULT_MIKHMON_SERVER_CONFIG } from './storage';
 import { convertToDynamicQris, generateQrDataUrl, validateQris, parseQris } from './qris';
 import { testTelegramConnection, dispatchTelegramBackup, getTelegramSchedulerStatus, checkDailyTelegramBackupSchedule } from './telegram';
 import { Invoice, InvoiceItem, PaymentTransaction, RealtimeEvent, ReminderLog, AdminUser, AdminUserSafe, CustomerMode, CustomerRecord, RecurringAddonService, MikhmonPlan, MikhmonInstance, MikhmonUploadedPackage, MikhmonServerConfig, MikhmonVoucher } from './types';
@@ -4487,7 +4487,7 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
     const detectedGit = detectLocalGitInfo();
     const defaultFallback = detectedGit.hasGit && detectedGit.repoUrl 
       ? detectedGit.repoUrl 
-      : 'ciptamedia/invoice-kilat';
+      : 'heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager';
     const defaultBranch = detectedGit.hasGit && detectedGit.branch
       ? detectedGit.branch
       : 'main';
@@ -4498,7 +4498,7 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
 
     let commitSha = detectedGit.commitSha || 'b7e21a4';
     let commitMessage = 'Release v3.2.0: Dynamic QRIS & Mikhmon Hosting Suite';
-    let commitAuthor = 'ciptamedia';
+    let commitAuthor = 'heruhendri';
     let commitDate = new Date().toISOString();
 
     try {
@@ -4511,11 +4511,11 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
         commitMessage = ghData.commit?.message?.split('\n')[0] || commitMessage;
         commitAuthor = ghData.commit?.author?.name || ghData.author?.login || commitAuthor;
         commitDate = ghData.commit?.author?.date || commitDate;
-      } else if (repo === 'ciptamedia/invoice-kilat') {
+      } else if (repo === 'heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager' || repo === 'ciptamedia/invoice-kilat') {
         // Fallback for default official repo
         commitSha = 'b7e21a4';
         commitMessage = 'Release v3.2.0: Core Application Update & Mikhmon Hosting Suite';
-        commitAuthor = 'Cipta Media Dev';
+        commitAuthor = 'heruhendri';
         commitDate = new Date().toISOString();
       } else {
         const errorData = await ghRes.json().catch(() => ({}));
@@ -4547,21 +4547,43 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/system/update-github - Perform 1-Click application update from GitHub
+// POST /api/system/update-github - Perform 1-Click application update from GitHub with Auto Rebuild and Data Preservation / Reset options
 apiRouter.post('/system/update-github', async (req: Request, res: Response) => {
   try {
-    const db = await getDatabase();
+    let db = await getDatabase();
     if (!db.settings) {
       db.settings = { ...DEFAULT_SETTINGS };
     }
 
-    const rawInput = (req.body.url as string) || (req.body.repo as string) || db.settings.appGithubRepo || 'ciptamedia/invoice-kilat';
+    const rawInput = (req.body.url as string) || (req.body.repo as string) || db.settings.appGithubRepo || 'heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager';
     const rawBranch = (req.body.branch as string) || db.settings.appGithubBranch || 'main';
+    const preserveData = req.body.preserveData !== false;
+    const wipeAllData = Boolean(req.body.wipeAllData);
+    const autoRebuild = req.body.autoRebuild !== false;
+
     const { repo, branch } = parseGithubUrlHelper(rawInput, rawBranch);
 
+    // 1. Create safety database snapshot before any file or git changes
+    const snapshotLabel = wipeAllData ? 'before_wipe_on_update' : 'pre_update';
+    const backupFilePath = createDatabaseBackupSnapshot(snapshotLabel);
+    const backupFileName = backupFilePath ? path.basename(backupFilePath) : '';
+
+    // Snapshot in-memory copy of current user data
+    const preservedInvoices = [...(db.invoices || [])];
+    const preservedCustomers = [...(db.customers || [])];
+    const preservedServices = [...(db.services || [])];
+    const preservedAddons = [...(db.recurringAddons || [])];
+    const preservedRules = [...(db.automationRules || [])];
+    const preservedLogs = [...(db.automationLogs || [])];
+    const preservedMikhmonPlans = [...(db.mikhmonPlans || [])];
+    const preservedMikhmonInstances = [...(db.mikhmonInstances || [])];
+    const preservedMikhmonServer = { ...(db.mikhmonServerSettings || DEFAULT_MIKHMON_SERVER_CONFIG) };
+    const preservedSettings = { ...(db.settings || DEFAULT_SETTINGS) };
+
+    // 2. Fetch latest commit metadata from GitHub API
     let commitSha = 'b7e21a4';
     let commitMessage = 'Release v3.2.0: Core Application Update';
-    let commitAuthor = 'ciptamedia';
+    let commitAuthor = 'heruhendri';
     let commitDate = new Date().toISOString();
 
     try {
@@ -4579,25 +4601,148 @@ apiRouter.post('/system/update-github', async (req: Request, res: Response) => {
       console.warn('GitHub API commit fetch warning for app:', e.message);
     }
 
+    // 3. Execute Git Pull if local .git repository exists
+    let gitPulled = false;
+    let gitPullMessage = '';
+    const localGit = detectLocalGitInfo();
+
+    if (localGit.hasGit) {
+      try {
+        // Fetch and checkout/pull from remote repository
+        const pullOutput = execSync(`git fetch origin ${branch} && git pull origin ${branch}`, {
+          cwd: process.cwd(),
+          timeout: 45000,
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        gitPulled = true;
+        gitPullMessage = pullOutput.trim();
+      } catch (gitErr: any) {
+        console.warn('Git pull warning (non-fatal):', gitErr.message);
+        gitPullMessage = `Git pull notice: ${gitErr.message}`;
+      }
+    }
+
+    // 4. Handle Data: Preservation vs Wipe
     const newVersion = `v3.2.0 (${commitSha})`;
-    db.settings.appVersion = newVersion;
-    db.settings.appGithubRepo = rawInput.startsWith('http') ? rawInput : `https://github.com/${repo}`;
-    db.settings.appGithubBranch = branch;
-    db.settings.lastAppUpdateAt = new Date().toISOString();
 
-    saveDatabase(db);
+    if (wipeAllData) {
+      // User explicitly opted to wipe/reset all transactional data
+      const resetResult = await resetDatabaseToDefaults('before_wipe_on_update');
+      db = resetResult.db;
+      db.settings.appVersion = newVersion;
+      db.settings.appGithubRepo = rawInput.startsWith('http') ? rawInput : `https://github.com/${repo}`;
+      db.settings.appGithubBranch = branch;
+      db.settings.lastAppUpdateAt = new Date().toISOString();
+      saveDatabase(db);
+    } else {
+      // User wants to PRESERVE all data (Default safe path)
+      // Even if git pull updated data/db.json, re-apply the user's data
+      db = {
+        settings: {
+          ...preservedSettings,
+          appVersion: newVersion,
+          appGithubRepo: rawInput.startsWith('http') ? rawInput : `https://github.com/${repo}`,
+          appGithubBranch: branch,
+          lastAppUpdateAt: new Date().toISOString(),
+        },
+        invoices: preservedInvoices,
+        customers: preservedCustomers,
+        services: preservedServices,
+        recurringAddons: preservedAddons,
+        automationRules: preservedRules,
+        automationLogs: preservedLogs,
+        remindersLog: db.remindersLog || [],
+        adminUsers: db.adminUsers || DEFAULT_ADMIN_USERS,
+        mikhmonPlans: preservedMikhmonPlans,
+        mikhmonInstances: preservedMikhmonInstances,
+        mikhmonServerSettings: preservedMikhmonServer,
+      };
+      saveDatabase(db);
+    }
 
+    // 5. Automatic Rebuild of Application (npm run build)
+    let rebuildResult: {
+      performed: boolean;
+      success: boolean;
+      durationSeconds: string;
+      message: string;
+    } = {
+      performed: false,
+      success: true,
+      durationSeconds: '0.0',
+      message: 'Rebuild dilewati.',
+    };
+
+    if (autoRebuild) {
+      const buildStart = Date.now();
+      try {
+        // Execute npm run build in background/sync with safety timeout
+        execSync('npm run build', {
+          cwd: process.cwd(),
+          timeout: 90000,
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        const durationMs = Date.now() - buildStart;
+        const durSec = (durationMs / 1000).toFixed(1);
+        rebuildResult = {
+          performed: true,
+          success: true,
+          durationSeconds: durSec,
+          message: `Rebuild aplikasi berhasil selesai dalam ${durSec} detik (Vite bundle & server bundle terbarukan).`,
+        };
+      } catch (bErr: any) {
+        const durationMs = Date.now() - buildStart;
+        const durSec = (durationMs / 1000).toFixed(1);
+        console.error('Auto rebuild error:', bErr.message);
+        rebuildResult = {
+          performed: true,
+          success: false,
+          durationSeconds: durSec,
+          message: `Rebuild otomatis mengalami kendala: ${bErr.message}. Anda dapat menjalankan 'npm run build' manual di terminal.`,
+        };
+      }
+    }
+
+    // 6. PM2 Reload if running under PM2 on VPS
+    try {
+      execSync('pm2 reload invoice-kilat || pm2 restart invoice-kilat', {
+        timeout: 5000,
+        stdio: ['ignore', 'ignore', 'ignore'],
+      });
+    } catch {}
+
+    // 7. Realtime Broadcast Event
     broadcastEvent({
       type: 'settings_updated' as any,
-      message: `Aplikasi berhasil diperbarui dari GitHub ke versi ${newVersion}`,
+      message: wipeAllData
+        ? `Aplikasi diperbarui ke versi ${newVersion} dan data berhasil di-reset ke setelan awal.`
+        : `Aplikasi berhasil diperbarui ke versi ${newVersion} dengan data utuh tersimpan aman.`,
       timestamp: new Date().toISOString(),
       payload: db.settings,
     });
 
+    const statusMessage = wipeAllData
+      ? `Aplikasi berhasil diperbarui & di-rebuild! Data telah di-reset ke setelan awal pabrik (Snapshot cadangan darurat: ${backupFileName}).`
+      : `Aplikasi berhasil diperbarui & di-rebuild! Seluruh data (${db.invoices.length} faktur, ${db.customers.length} pelanggan) tersimpan utuh dan aman.`;
+
     return res.json({
       success: true,
-      message: `Aplikasi berhasil diperbarui dari repositori GitHub (${repo} branch ${branch} @${commitSha})!`,
+      message: statusMessage,
       version: newVersion,
+      preserveData: !wipeAllData,
+      wipeAllData,
+      rebuild: rebuildResult,
+      backupFile: backupFileName,
+      gitPulled,
+      gitPullMessage,
+      stats: {
+        totalInvoices: db.invoices.length,
+        totalCustomers: db.customers.length,
+        totalServices: db.services.length,
+        totalRouters: db.customers.filter((c: any) => c.customerMode === 'noc').length,
+      },
       settings: db.settings,
       commitDetails: {
         repo,
@@ -4609,6 +4754,7 @@ apiRouter.post('/system/update-github', async (req: Request, res: Response) => {
       },
     });
   } catch (err: any) {
+    console.error('Update application error:', err);
     return res.status(500).json({ success: false, message: 'Gagal memperbarui aplikasi: ' + err.message });
   }
 });

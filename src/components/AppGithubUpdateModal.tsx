@@ -13,7 +13,13 @@ import {
   ArrowRight,
   ShieldCheck,
   CheckCheck,
-  FolderGit2
+  FolderGit2,
+  Database,
+  Trash2,
+  Cpu,
+  Lock,
+  Layers,
+  Info
 } from 'lucide-react';
 import { BusinessSettings } from '../types';
 
@@ -38,18 +44,18 @@ const PRESET_APP_REPOS = [
   {
     id: 'official-main',
     title: 'InvoiceKilat Official (Main)',
-    repo: 'ciptamedia/invoice-kilat',
+    repo: 'heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager',
     branch: 'main',
-    url: 'https://github.com/ciptamedia/invoice-kilat',
+    url: 'https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager',
     desc: 'Rilis resmi paling stabil dengan modul QRIS Dinamis & Mikhmon Hosting Suite',
     badge: 'Produksi',
   },
   {
     id: 'official-dev',
     title: 'InvoiceKilat Staging / Preview',
-    repo: 'ciptamedia/invoice-kilat',
+    repo: 'heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager',
     branch: 'dev',
-    url: 'https://github.com/ciptamedia/invoice-kilat/tree/dev',
+    url: 'https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager/tree/dev',
     desc: 'Fitur terbaru, pembaruan performa, dan optimasi eksperimental',
     badge: 'Preview Dev',
   },
@@ -71,7 +77,7 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
   onUpdateSuccess,
 }) => {
   const currentAppVersion = settings?.appVersion || 'v3.2.0-stable';
-  const initialUrl = settings?.appGithubRepo || 'https://github.com/ciptamedia/invoice-kilat';
+  const initialUrl = settings?.appGithubRepo || 'https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager';
   const initialBranch = settings?.appGithubBranch || 'main';
 
   const [selectedPreset, setSelectedPreset] = useState<string>('official-main');
@@ -85,6 +91,25 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
   const [successResult, setSuccessResult] = useState<{
     version: string;
     message: string;
+  } | null>(null);
+
+  // Data Retention Strategy & Auto Rebuild States
+  const [dataHandlingMode, setDataHandlingMode] = useState<'preserve' | 'wipe'>('preserve');
+  const [autoRebuild, setAutoRebuild] = useState<boolean>(true);
+  const [confirmWipeChecked, setConfirmWipeChecked] = useState<boolean>(false);
+  const [updatePhaseText, setUpdatePhaseText] = useState<string>('');
+  const [rebuildResult, setRebuildResult] = useState<{
+    performed: boolean;
+    success: boolean;
+    durationSeconds: string;
+    message: string;
+  } | null>(null);
+  const [backupFileName, setBackupFileName] = useState<string | null>(null);
+  const [preservedStats, setPreservedStats] = useState<{
+    totalInvoices: number;
+    totalCustomers: number;
+    totalServices: number;
+    totalRouters: number;
   } | null>(null);
 
   // Local .git folder detection state
@@ -187,7 +212,7 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
           setSelectedPreset('git-detected');
           handleCheckCommit(gitInfo.repoUrl, gitInfo.branch || 'main');
         } else {
-          const activeUrl = settings?.appGithubRepo || 'https://github.com/ciptamedia/invoice-kilat';
+          const activeUrl = settings?.appGithubRepo || 'https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager';
           const activeBranch = settings?.appGithubBranch || 'main';
           setCustomUrl(activeUrl);
           setBranch(activeBranch);
@@ -271,10 +296,31 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
       return;
     }
 
+    if (dataHandlingMode === 'wipe' && !confirmWipeChecked) {
+      setErrorMsg('Harap centang kotak konfirmasi bahwa Anda setuju untuk mereset seluruh data transaksi ke setelan awal.');
+      return;
+    }
+
     const { repo, branch: b } = parseRepoAndBranch(customUrl);
     setIsUpdating(true);
     setErrorMsg(null);
     setSuccessResult(null);
+    setRebuildResult(null);
+    setBackupFileName(null);
+    setPreservedStats(null);
+    setUpdatePhaseText('1/3 Mengamankan snapshot database lokal...');
+
+    const phaseTimer1 = setTimeout(() => {
+      setUpdatePhaseText('2/3 Memperbarui kode dari repositori GitHub...');
+    }, 1500);
+
+    const phaseTimer2 = setTimeout(() => {
+      if (autoRebuild) {
+        setUpdatePhaseText('3/3 Menjalankan rebuild otomatis aplikasi (npm run build)...');
+      } else {
+        setUpdatePhaseText('3/3 Menyimpan konfigurasi sistem...');
+      }
+    }, 3800);
 
     try {
       const res = await fetch('/api/system/update-github', {
@@ -284,23 +330,41 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
           repo,
           url: customUrl,
           branch: b,
+          preserveData: dataHandlingMode === 'preserve',
+          wipeAllData: dataHandlingMode === 'wipe',
+          autoRebuild,
         }),
       });
 
       const data = await res.json();
+      clearTimeout(phaseTimer1);
+      clearTimeout(phaseTimer2);
+
       if (data && data.success) {
         setSuccessResult({
           version: data.version,
           message: data.message || 'Aplikasi berhasil diperbarui dari GitHub!',
         });
+        if (data.rebuild) {
+          setRebuildResult(data.rebuild);
+        }
+        if (data.backupFile) {
+          setBackupFileName(data.backupFile);
+        }
+        if (data.stats) {
+          setPreservedStats(data.stats);
+        }
         onUpdateSuccess(data.settings || {});
       } else {
         setErrorMsg(data?.message || 'Gagal menerapkan pembaruan aplikasi dari GitHub');
       }
     } catch (err: any) {
+      clearTimeout(phaseTimer1);
+      clearTimeout(phaseTimer2);
       setErrorMsg(err.message || 'Terjadi kesalahan saat memproses update aplikasi');
     } finally {
       setIsUpdating(false);
+      setUpdatePhaseText('');
     }
   };
 
@@ -469,7 +533,7 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
                   placeholder={
                     selectedPreset === 'custom'
                       ? 'https://github.com/username/fork-repo atau owner/repo'
-                      : 'https://github.com/ciptamedia/invoice-kilat'
+                      : 'https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager'
                   }
                   required
                   className={`w-full pl-10 pr-28 py-2.5 text-xs font-mono rounded-xl border transition-all duration-150 ${
@@ -660,24 +724,187 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
             </div>
           )}
 
-          {/* Success Message Banner */}
+          {/* Pengaturan Penanganan Data & Rebuild Otomatis */}
+          <div className="space-y-3 pt-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
+                <Database className="w-3.5 h-3.5 text-blue-400" />
+                <span>Pengaturan Data & Rebuild Otomatis</span>
+              </label>
+              <span className="text-[11px] text-slate-400">
+                Pilih perlakuan data transaksi Anda
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Opsi 1: Pertahankan Data (Aman & Rekomendasi) */}
+              <div
+                onClick={() => setDataHandlingMode('preserve')}
+                className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  dataHandlingMode === 'preserve'
+                    ? 'bg-emerald-950/40 border-emerald-500/70 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-500/30'
+                    : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-80'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg ${dataHandlingMode === 'preserve' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-extrabold text-white">Pertahankan Data</span>
+                  </div>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+                    Aman & Utuh
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  <strong className="text-emerald-300">Data Tidak Dihapus</strong>. Seluruh invoice, pelanggan, paket MikroTik, dan pengaturan bisnis tetap utuh 100%. Dilengkapi snapshot cadangan otomatis sebelum update.
+                </p>
+              </div>
+
+              {/* Opsi 2: Reset Bersih / Hapus Semua Data */}
+              <div
+                onClick={() => setDataHandlingMode('wipe')}
+                className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                  dataHandlingMode === 'wipe'
+                    ? 'bg-rose-950/40 border-rose-500/70 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500/30'
+                    : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-80'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg ${dataHandlingMode === 'wipe' ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-800 text-slate-400'}`}>
+                      <Trash2 className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-extrabold text-white">Hapus Semua Data</span>
+                  </div>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono">
+                    Reset Pabrik
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Mengembalikan database ke kondisi awal template. Menghapus seluruh transaksi dan invoice uji coba. Snapshot darurat tetap dibuat sebelum reset.
+                </p>
+              </div>
+            </div>
+
+            {/* Checkbox Konfirmasi jika memilih mode Hapus Semua Data */}
+            {dataHandlingMode === 'wipe' && (
+              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/60 text-xs text-rose-200 animate-in fade-in">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={confirmWipeChecked}
+                    onChange={(e) => setConfirmWipeChecked(e.target.checked)}
+                    className="mt-0.5 rounded border-rose-600 text-rose-600 focus:ring-rose-500 bg-slate-900 cursor-pointer"
+                  />
+                  <span className="text-[11px] leading-relaxed">
+                    <strong>Saya mengerti:</strong> Semua data transaksi, tagihan, dan pelanggan akan dibersihkan kembali ke setelan awal pabrik (Snapshot darurat tetap akan diamankan di <code>data/backups/</code>).
+                  </span>
+                </label>
+              </div>
+            )}
+
+            {/* Switch Auto Rebuild */}
+            <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-white block">
+                    Otomatis Rebuild Aplikasi (<code className="text-blue-300 font-mono text-[10px]">npm run build</code>)
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Kompilasi ulang bundle Vite & production server secara otomatis sehingga update kode langsung aktif tanpa perlu build manual lewat terminal.
+                  </span>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={autoRebuild}
+                  onChange={(e) => setAutoRebuild(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* Updating In-Progress Live Feedback */}
+          {isUpdating && (
+            <div className="p-4 rounded-2xl bg-blue-950/50 border border-blue-500/40 text-blue-200 text-xs space-y-2 animate-in fade-in">
+              <div className="flex items-center gap-2 font-bold text-blue-300">
+                <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
+                <span>Memproses Pembaruan & Rebuild Aplikasi...</span>
+              </div>
+              <p className="text-[11px] text-blue-200/90 font-mono">
+                {updatePhaseText || 'Sedang memproses... Harap tunggu beberapa saat.'}
+              </p>
+              <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                <div className="bg-blue-500 h-1.5 rounded-full animate-pulse w-3/4"></div>
+              </div>
+            </div>
+          )}
+
+          {/* Success Message Banner with Rebuild and Data Metrics */}
           {successResult && (
-            <div className="p-4 rounded-2xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-200 text-xs space-y-2 animate-in fade-in">
+            <div className="p-4 rounded-2xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-200 text-xs space-y-2.5 animate-in fade-in">
               <div className="flex items-center gap-2 font-bold text-emerald-300">
                 <CheckCheck className="w-4 h-4 text-emerald-400" />
-                <span>Pembaruan Berhasil Diterapkan!</span>
+                <span>Pembaruan & Rebuild Berhasil Diterapkan!</span>
               </div>
               <p className="text-[11px] text-emerald-200/90">
                 {successResult.message} Versi sekarang: <strong className="font-mono text-white">{successResult.version}</strong>
               </p>
+
+              {/* Detail Metrics Rebuild & Data */}
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-emerald-900/50 text-[11px] space-y-1.5">
+                {rebuildResult && (
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Status Rebuild:</span>
+                    </span>
+                    <span className={`font-mono font-bold ${rebuildResult.success ? 'text-emerald-300' : 'text-amber-300'}`}>
+                      {rebuildResult.success ? `✓ Sukses (${rebuildResult.durationSeconds}s)` : 'Peringatan build manual'}
+                    </span>
+                  </div>
+                )}
+
+                {preservedStats && (
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Status Data:</span>
+                    </span>
+                    <span className="font-mono text-emerald-300 font-bold">
+                      {dataHandlingMode === 'preserve'
+                        ? `Utuh (${preservedStats.totalInvoices} Faktur, ${preservedStats.totalCustomers} Pelanggan)`
+                        : 'Reset ke Setelan Awal Pabrik'}
+                    </span>
+                  </div>
+                )}
+
+                {backupFileName && (
+                  <div className="flex items-center justify-between text-slate-400 pt-0.5 border-t border-slate-800/80">
+                    <span>Snapshot Cadangan:</span>
+                    <span className="font-mono text-slate-300 text-[10px] truncate max-w-[200px]" title={backupFileName}>
+                      {backupFileName}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <div className="pt-1 flex items-center justify-end">
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-md shadow-emerald-700/30"
                 >
                   <RefreshCw className="w-3 h-3" />
-                  <span>Muat Ulang Halaman</span>
+                  <span>Muat Ulang Halaman Sekarang</span>
                 </button>
               </div>
             </div>

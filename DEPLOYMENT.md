@@ -181,7 +181,7 @@ Tersedia skrip installer otomatis **`install-vps.sh`** yang mendeteksi OS, memas
 
 1. **Clone dan Jalankan Installer di VPS:**
    ```bash
-   git clone https://github.com/USERNAME/invoice-kilat.git
+   git clone https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager.git invoice-kilat
    cd invoice-kilat
    sudo bash install-vps.sh
    ```
@@ -216,7 +216,7 @@ sudo npm install -g pm2
 ##### 2. Clone Repositori dan Tentukan Port Kustom:
 ```bash
 # Clone repositori dari GitHub
-git clone https://github.com/USERNAME/invoice-kilat.git
+git clone https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager.git invoice-kilat
 cd invoice-kilat
 
 # Salin konfigurasi environment & ubah PORT sesuai keinginan (misal: 8080)

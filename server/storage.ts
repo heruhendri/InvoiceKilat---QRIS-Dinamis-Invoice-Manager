@@ -72,7 +72,7 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   appLogoUrl: '',
   appTagline: 'Sistem Faktur & QRIS Dinamis Otomatis',
   appVersion: 'v3.2.0-stable',
-  appGithubRepo: 'https://github.com/ciptamedia/invoice-kilat',
+  appGithubRepo: 'https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager',
   appGithubBranch: 'main',
 
   businessName: 'PT Cipta Media Nusantara',
@@ -815,6 +815,38 @@ export function createDatabaseBackupSnapshot(label: string = 'pre_restore'): str
     console.warn('Failed to create database snapshot:', err.message);
     return '';
   }
+}
+
+/**
+ * Wipes / resets the database to fresh factory seed state, after creating an emergency snapshot
+ */
+export async function resetDatabaseToDefaults(label: string = 'before_wipe'): Promise<{ backupFile: string; db: DatabaseSchema }> {
+  const backupFile = createDatabaseBackupSnapshot(label);
+  const initialInvoices = await createSeedInvoices();
+  const currentAppRepo = cachedDb?.settings?.appGithubRepo || DEFAULT_SETTINGS.appGithubRepo;
+  const currentAppBranch = cachedDb?.settings?.appGithubBranch || DEFAULT_SETTINGS.appGithubBranch;
+  
+  const freshDb: DatabaseSchema = {
+    settings: {
+      ...DEFAULT_SETTINGS,
+      appGithubRepo: currentAppRepo,
+      appGithubBranch: currentAppBranch,
+    },
+    invoices: initialInvoices,
+    customers: [...DEFAULT_CUSTOMERS],
+    services: [...DEFAULT_SERVICES],
+    recurringAddons: [...DEFAULT_RECURRING_ADDONS],
+    automationRules: [...DEFAULT_AUTOMATION_RULES],
+    automationLogs: [],
+    remindersLog: [],
+    adminUsers: [...DEFAULT_ADMIN_USERS],
+    mikhmonPlans: [...DEFAULT_MIKHMON_PLANS],
+    mikhmonInstances: [...DEFAULT_MIKHMON_INSTANCES],
+    mikhmonServerSettings: { ...DEFAULT_MIKHMON_SERVER_CONFIG },
+  };
+
+  saveDatabase(freshDb);
+  return { backupFile, db: freshDb };
 }
 
 async function createSeedInvoices(): Promise<Invoice[]> {
