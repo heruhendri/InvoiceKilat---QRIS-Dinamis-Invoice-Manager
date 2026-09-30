@@ -1,5 +1,167 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light dark;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
+/* ========================================================================= */
+/* COMPREHENSIVE DARK MODE & LIGHT MODE SYSTEM                               */
+/* ========================================================================= */
+
+/* Root & body background & typography smooth transitions */
+body {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html.dark body {
+  background-color: #020617; /* deep cyber slate-950 */
+  color: #f1f5f9; /* slate-100 */
+}
+
+/* 1. Main surface cards, panels & modals in dark mode */
+.dark :is(.bg-white):not(#printable-invoice-content, #printable-invoice-content *, .keep-white, .keep-white *, [data-qr-box], [data-qr-box] *, .qr-container, .qr-container *) {
+  background-color: #0f172a !important; /* slate-900 */
+}
+
+/* 2. Secondary & subtle surfaces (toolbars, filters, table headers) */
+.dark :is(.bg-slate-50, .bg-slate-100, .bg-slate-100\/70, .bg-slate-100\/80):not(#printable-invoice-content, #printable-invoice-content *, .keep-white, .keep-white *) {
+  background-color: #1e293b !important; /* slate-800 */
+}
+
+.dark :is(.bg-slate-50\/50, .bg-slate-50\/60, .bg-slate-50\/70, .bg-slate-50\/80, .bg-slate-50\/90):not(#printable-invoice-content, #printable-invoice-content *, .keep-white, .keep-white *) {
+  background-color: rgba(30, 41, 59, 0.7) !important;
+}
+
+/* 3. Global Borders in dark mode */
+.dark :is(.border-slate-100, .border-slate-200, .border-slate-200\/80, .border-slate-200\/90, .border-slate-300):not(#printable-invoice-content, #printable-invoice-content *) {
+  border-color: #334155 !important; /* slate-700 */
+}
+
+.dark :is(.divide-slate-100, .divide-slate-200) > * + * {
+  border-color: #334155 !important;
+}
+
+/* 4. Text & Heading Contrast in dark mode */
+.dark :is(.text-slate-900, .text-slate-800):not(#printable-invoice-content, #printable-invoice-content *, .keep-text, .keep-text *) {
+  color: #f8fafc !important; /* slate-50 */
+}
+
+.dark :is(.text-slate-700, .text-slate-600):not(#printable-invoice-content, #printable-invoice-content *, .keep-text, .keep-text *) {
+  color: #cbd5e1 !important; /* slate-300 */
+}
+
+.dark :is(.text-slate-500):not(#printable-invoice-content, #printable-invoice-content *, .keep-text, .keep-text *) {
+  color: #94a3b8 !important; /* slate-400 */
+}
+
+/* 5. Form controls: inputs, textareas, selects */
+.dark input:not([type="checkbox"]):not([type="radio"]):not(#printable-invoice-content *),
+.dark select:not(#printable-invoice-content *),
+.dark textarea:not(#printable-invoice-content *) {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #475569 !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* 6. Hover states */
+.dark :is(.hover\:bg-slate-50, .hover\:bg-slate-100):hover:not(#printable-invoice-content, #printable-invoice-content *) {
+  background-color: #334155 !important;
+}
+
+.dark :is(.hover\:bg-white):hover:not(#printable-invoice-content, #printable-invoice-content *) {
+  background-color: #1e293b !important;
+}
+
+.dark :is(.hover\:text-slate-900):hover:not(#printable-invoice-content, #printable-invoice-content *) {
+  color: #ffffff !important;
+}
+
+/* 7. Soft colored badges & cards in dark mode */
+.dark :is(.bg-blue-50, .bg-blue-50\/60, .bg-blue-50\/70, .bg-blue-50\/80, .bg-blue-50\/90):not(#printable-invoice-content, #printable-invoice-content *) {
+  background-color: rgba(30, 58, 138, 0.28) !important;
+  color: #93c5fd !important;
+}
+.dark :is(.border-blue-100, .border-blue-200):not(#printable-invoice-content, #printable-invoice-content *) {
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.dark :is(.bg-emerald-50, .bg-emerald-50\/60, .bg-emerald-50\/70, .bg-emerald-50\/80, .bg-emerald-50\/90):not(#printable-invoice-content, #printable-invoice-content *) {
+  background-color: rgba(6, 78, 59, 0.28) !important;
+  color: #6ee7b7 !important;
+}
+.dark :is(.border-emerald-100, .border-emerald-200):not(#printable-invoice-content, #printable-invoice-content *) {
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.dark :is(.bg-amber-50, .bg-amber-50\/60, .bg-amber-50\/70, .bg-amber-50\/80, .bg-amber-50\/90):not(#printable-invoice-content, #printable-invoice-content *) {
+  background-color: rgba(120, 53, 15, 0.28) !important;
+  color: #fcd34d !important;
+}
+.dark :is(.border-amber-100, .border-amber-200):not(#printable-invoice-content, #printable-invoice-content *) {
+  border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.dark :is(.bg-rose-50, .bg-rose-50\/60, .bg-rose-50\/70, .bg-rose-50\/80, .bg-rose-50\/90):not(#printable-invoice-content, #printable-invoice-content *) {
+  background-color: rgba(136, 19, 55, 0.28) !important;
+  color: #fda4af !important;
+}
+.dark :is(.border-rose-100, .border-rose-200):not(#printable-invoice-content, #printable-invoice-content *) {
+  border-color: rgba(244, 63, 94, 0.3) !important;
+}
+
+.dark :is(.bg-indigo-50, .bg-indigo-50\/60, .bg-indigo-50\/70, .bg-indigo-50\/80, .bg-indigo-50\/90):not(#printable-invoice-content, #printable-invoice-content *) {
+  background-color: rgba(49, 46, 129, 0.28) !important;
+  color: #a5b4fc !important;
+}
+.dark :is(.border-indigo-100, .border-indigo-200):not(#printable-invoice-content, #printable-invoice-content *) {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+.dark :is(.bg-orange-50, .bg-orange-50\/60, .bg-orange-50\/70, .bg-orange-50\/80, .bg-orange-50\/90):not(#printable-invoice-content, #printable-invoice-content *) {
+  background-color: rgba(124, 45, 18, 0.28) !important;
+  color: #fdba74 !important;
+}
+.dark :is(.border-orange-100, .border-orange-200):not(#printable-invoice-content, #printable-invoice-content *) {
+  border-color: rgba(249, 115, 22, 0.3) !important;
+}
+
+/* 8. Shadows in dark mode */
+.dark .shadow-xs,
+.dark .shadow-sm,
+.dark .shadow-md,
+.dark .shadow-lg,
+.dark .shadow-xl,
+.dark .shadow-2xl {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* 9. Preserve printable invoice & QR code scanning integrity */
+#printable-invoice-content,
+#printable-invoice-content * {
+  color-scheme: light !important;
+}
+
+.qr-box,
+[data-qr-box] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
 @layer utilities {
   /* Hide scrollbar for Chrome, Safari and Opera */
   .no-scrollbar::-webkit-scrollbar {
@@ -44,4 +206,5 @@
     }
   }
 }
+
 

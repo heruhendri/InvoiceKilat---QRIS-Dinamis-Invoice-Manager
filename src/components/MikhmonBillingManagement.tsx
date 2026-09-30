@@ -39,13 +39,15 @@ import {
   Printer,
   Ticket,
   Monitor,
-  Maximize2
+  Maximize2,
+  Github
 } from 'lucide-react';
 import { MikhmonInstance, MikhmonPlan, CustomerRecord, Invoice, BusinessSettings, MikhmonUploadedPackage, MikhmonServerConfig } from '../types';
 import { formatRupiah, formatDateIndo } from '../utils/formatters';
 import { MikhmonWebserverModal } from './MikhmonWebserverModal';
 import { MikhmonLivePortalModal } from './MikhmonLivePortalModal';
 import { MikhmonVoucherStudioModal } from './MikhmonVoucherStudioModal';
+import { MikhmonGithubUpdateModal } from './MikhmonGithubUpdateModal';
 
 
 interface MikhmonBillingManagementProps {
@@ -123,6 +125,8 @@ export const MikhmonBillingManagement: React.FC<MikhmonBillingManagementProps> =
   const [activePortalInstance, setActivePortalInstance] = useState<MikhmonInstance | null>(null);
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState<boolean>(false);
   const [activeVoucherInstance, setActiveVoucherInstance] = useState<MikhmonInstance | null>(null);
+  const [isUpdatingGithub, setIsUpdatingGithub] = useState<boolean>(false);
+  const [isGithubUpdateModalOpen, setIsGithubUpdateModalOpen] = useState<boolean>(false);
 
   // Feedback Notification
 
@@ -700,6 +704,40 @@ export const MikhmonBillingManagement: React.FC<MikhmonBillingManagementProps> =
       }
     } catch (err: any) {
       showNotice('error', err.message);
+    }
+  };
+
+  // Quick 1-Click Update from GitHub
+  const handleQuickGithubUpdate = async () => {
+    setIsUpdatingGithub(true);
+    try {
+      const res = await fetch('/api/mikhmon/packages/update-github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo: 'laksa19/mikhmonv3',
+          branch: 'master',
+          setAsDefault: true,
+        }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        showNotice('success', data.message || 'Mikhmon berhasil diperbarui langsung dari GitHub!');
+        if (data.packages) {
+          setServerConfig((prev) => ({
+            ...prev,
+            uploadedPackages: data.packages,
+            activeVersion: data.activeVersion || prev.activeVersion,
+          }));
+        }
+        fetchMikhmonData(true);
+      } else {
+        showNotice('error', data?.message || 'Gagal update dari GitHub');
+      }
+    } catch (err: any) {
+      showNotice('error', 'Gagal update dari GitHub: ' + err.message);
+    } finally {
+      setIsUpdatingGithub(false);
     }
   };
 
@@ -1878,6 +1916,22 @@ export const MikhmonBillingManagement: React.FC<MikhmonBillingManagementProps> =
         onOpenVouchers={(inst) => {
           setActiveVoucherInstance(inst);
           setIsVoucherModalOpen(true);
+        }}
+        onOpenGithubModal={() => setIsGithubUpdateModalOpen(true)}
+        showNotice={showNotice}
+      />
+
+      {/* Mikhmon Custom GitHub Link Update Modal */}
+      <MikhmonGithubUpdateModal
+        isOpen={isGithubUpdateModalOpen}
+        onClose={() => setIsGithubUpdateModalOpen(false)}
+        serverConfig={serverConfig}
+        onUpdateSuccess={(updatedConfig) => {
+          setServerConfig((prev) => ({
+            ...prev,
+            ...updatedConfig,
+          }));
+          fetchMikhmonData(true);
         }}
         showNotice={showNotice}
       />

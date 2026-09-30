@@ -20,7 +20,10 @@ import {
   Trash2,
   Sparkles,
   Settings,
-  Code2
+  Code2,
+  Github,
+  GitBranch,
+  GitPullRequest
 } from 'lucide-react';
 import { MikhmonInstance, MikhmonServerConfig, MikhmonWebserverStatus, MikhmonUploadedPackage } from '../types';
 
@@ -53,6 +56,7 @@ interface MikhmonWebserverModalProps {
   nginxVhost?: string;
   onOpenPortal: (inst: MikhmonInstance) => void;
   onOpenVouchers: (inst: MikhmonInstance) => void;
+  onOpenGithubModal?: () => void;
   showNotice: (type: 'success' | 'error' | 'info', message: string) => void;
 }
 
@@ -73,6 +77,7 @@ export const MikhmonWebserverModal: React.FC<MikhmonWebserverModalProps> = ({
   nginxVhost,
   onOpenPortal,
   onOpenVouchers,
+  onOpenGithubModal,
   showNotice,
 }) => {
   const [activeTab, setActiveTab] = useState<'status' | 'domain' | 'vhosts' | 'upload' | 'installer' | 'nginx'>('status');
@@ -88,6 +93,74 @@ export const MikhmonWebserverModal: React.FC<MikhmonWebserverModalProps> = ({
   });
   const [installerScript, setInstallerScript] = useState<string>('');
   const [isGeneratingScript, setIsGeneratingScript] = useState<boolean>(false);
+
+  // GitHub Auto-Update State
+  const [isUpdatingGithub, setIsUpdatingGithub] = useState<boolean>(false);
+  const [isCheckingGithub, setIsCheckingGithub] = useState<boolean>(false);
+  const [githubRepo, setGithubRepo] = useState<string>('laksa19/mikhmonv3');
+  const [githubBranch, setGithubBranch] = useState<string>('master');
+  const [githubInfo, setGithubInfo] = useState<{
+    repo: string;
+    branch: string;
+    commitSha: string;
+    commitMessage: string;
+    commitAuthor: string;
+    commitDate: string;
+    downloadUrl: string;
+  } | null>(null);
+
+  // Check latest release / commit on GitHub
+  const handleCheckGithub = async (repoName = githubRepo, branchName = githubBranch) => {
+    setIsCheckingGithub(true);
+    try {
+      const res = await fetch(`/api/mikhmon/packages/github-info?repo=${encodeURIComponent(repoName)}&branch=${encodeURIComponent(branchName)}`);
+      const data = await res.json();
+      if (data && data.success) {
+        setGithubInfo(data);
+      }
+    } catch (err: any) {
+      console.warn('Gagal cek GitHub info:', err);
+    } finally {
+      setIsCheckingGithub(false);
+    }
+  };
+
+  // Perform 1-Click Update from GitHub
+  const handleUpdateFromGithub = async () => {
+    setIsUpdatingGithub(true);
+    try {
+      const res = await fetch('/api/mikhmon/packages/update-github', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo: githubRepo,
+          branch: githubBranch,
+          setAsDefault: true,
+        }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        showNotice('success', data.message || 'Mikhmon berhasil diperbarui langsung dari GitHub!');
+        if (data.packages) {
+          setServerConfig((prev) => ({
+            ...prev,
+            uploadedPackages: data.packages,
+            activeVersion: data.activeVersion || prev.activeVersion,
+          }));
+        }
+        if (data.commitDetails) {
+          setGithubInfo(data.commitDetails);
+        }
+        fetchStatus();
+      } else {
+        showNotice('error', data?.message || 'Gagal memperbarui Mikhmon dari GitHub');
+      }
+    } catch (err: any) {
+      showNotice('error', 'Gagal memperbarui dari GitHub: ' + err.message);
+    } finally {
+      setIsUpdatingGithub(false);
+    }
+  };
 
   // Fetch Webserver Status
   const fetchStatus = async () => {
@@ -108,6 +181,7 @@ export const MikhmonWebserverModal: React.FC<MikhmonWebserverModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchStatus();
+      handleCheckGithub();
       setVpsForm({
         domain: serverConfig.masterDomain || 'mikhmon.online',
         ip: serverConfig.fallbackIpOrHost || '103.189.234.12',
@@ -170,6 +244,23 @@ export const MikhmonWebserverModal: React.FC<MikhmonWebserverModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (onOpenGithubModal) {
+                  onOpenGithubModal();
+                } else {
+                  handleUpdateFromGithub();
+                }
+              }}
+              disabled={isUpdatingGithub}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 text-xs font-bold transition shadow-xs active:scale-95 disabled:opacity-50"
+              title="Buka dialog update custom link GitHub atau repositori resmi"
+            >
+              <Github className="w-4 h-4 text-white" />
+              <span>{isUpdatingGithub ? 'Memperbarui...' : 'Update Custom Link GitHub'}</span>
+              {isUpdatingGithub && <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />}
+            </button>
+
             <button
               onClick={fetchStatus}
               disabled={isLoading}
@@ -305,8 +396,18 @@ export const MikhmonWebserverModal: React.FC<MikhmonWebserverModalProps> = ({
                   <div className="mt-2 text-sm font-bold font-mono text-white truncate">
                     {serverConfig.activeVersion || 'V3.20 (PHP 8.2)'}
                   </div>
-                  <div className="mt-1 text-[11px] text-indigo-400">
-                    LTS Cloud Edition
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-[11px] text-indigo-400">LTS Cloud Edition</span>
+                    <button
+                      type="button"
+                      onClick={handleUpdateFromGithub}
+                      disabled={isUpdatingGithub}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 hover:underline disabled:opacity-50"
+                      title="Update engine dari GitHub sekarang"
+                    >
+                      <Github className="w-3 h-3" />
+                      <span>{isUpdatingGithub ? 'Updating...' : 'Update GitHub'}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -678,6 +779,163 @@ export const MikhmonWebserverModal: React.FC<MikhmonWebserverModalProps> = ({
           {/* TAB 4: UPLOAD WEB MIKHMON */}
           {activeTab === 'upload' && (
             <div className="space-y-6">
+              {/* GitHub 1-Click Auto Update Card */}
+              <div className="p-5 rounded-2xl border border-indigo-500/30 bg-linear-to-br from-indigo-950/40 via-slate-950 to-slate-900 space-y-4 shadow-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                      <Github className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-white flex items-center gap-2">
+                        <span>Pembaruan Otomatis dari GitHub (1-Click)</span>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          Official laksa19/mikhmonv3
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Tarik kode master rilis terbaru dari repositori GitHub resmi atau fork custom Anda tanpa perlu upload manual berkas ZIP.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleUpdateFromGithub}
+                    disabled={isUpdatingGithub}
+                    className="px-4 py-2.5 rounded-xl bg-linear-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black text-xs transition flex items-center gap-2 shadow-md active:scale-95 disabled:opacity-50 shrink-0"
+                  >
+                    <Github className="w-4 h-4" />
+                    <span>{isUpdatingGithub ? 'Sedang Memperbarui...' : 'Update Sekarang dari GitHub'}</span>
+                    {isUpdatingGithub && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  </button>
+                </div>
+
+                {/* Preset Chips */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-[11px] text-slate-400 font-semibold">Preset Cepat:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGithubRepo('laksa19/mikhmonv3');
+                      setGithubBranch('master');
+                      handleCheckGithub('laksa19/mikhmonv3', 'master');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                      githubRepo === 'laksa19/mikhmonv3'
+                        ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    Mikhmon V3 Official
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGithubRepo('laksa19/mikhmonv4');
+                      setGithubBranch('main');
+                      handleCheckGithub('laksa19/mikhmonv4', 'main');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                      githubRepo === 'laksa19/mikhmonv4'
+                        ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    Mikhmon V4 Modern
+                  </button>
+
+                  {onOpenGithubModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenGithubModal}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20 transition flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      <span>Dialog Custom Link Lengkap</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
+                      Custom Link / Repository GitHub
+                    </label>
+                    <div className="relative">
+                      <Github className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={githubRepo}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setGithubRepo(val);
+                          if (val.includes('/tree/')) {
+                            const b = val.split('/tree/')[1]?.split('/')[0];
+                            if (b) setGithubBranch(b);
+                          }
+                        }}
+                        placeholder="https://github.com/laksa19/mikhmonv3 atau user/repo"
+                        className="w-full pl-8 pr-3 py-1.5 text-xs font-mono rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1">
+                      Branch / Tag
+                    </label>
+                    <div className="relative">
+                      <GitBranch className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={githubBranch}
+                        onChange={(e) => setGithubBranch(e.target.value)}
+                        placeholder="master"
+                        className="w-full pl-8 pr-3 py-1.5 text-xs font-mono rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => handleCheckGithub(githubRepo, githubBranch)}
+                      disabled={isCheckingGithub}
+                      className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isCheckingGithub ? 'animate-spin' : ''}`} />
+                      <span>Cek Commit Terbaru</span>
+                    </button>
+                  </div>
+                </div>
+
+                {githubInfo && (
+                  <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs space-y-1.5 font-mono">
+                    <div className="flex items-center justify-between text-slate-400">
+                      <span>Commit SHA: <strong className="text-amber-400">{githubInfo.commitSha}</strong> ({githubInfo.branch})</span>
+                      <span className="text-[11px] text-slate-500">{new Date(githubInfo.commitDate).toLocaleDateString('id-ID')}</span>
+                    </div>
+                    <div className="text-slate-200 truncate font-sans font-medium">
+                      Pesan: {githubInfo.commitMessage}
+                    </div>
+                    <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800/80">
+                      <span>Author: {githubInfo.commitAuthor}</span>
+                      <a
+                        href={githubInfo.downloadUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-400 hover:underline flex items-center gap-1 font-bold"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        <span>Unduh Arsip ZIP</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Upload Form Box */}
               <form onSubmit={onUploadWebPackage} className="p-5 rounded-2xl border border-slate-800 bg-slate-950 space-y-4">
                 <div className="flex items-center gap-2">

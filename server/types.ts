@@ -293,6 +293,10 @@ export interface BusinessSettings {
   appName?: string;
   appLogoUrl?: string;
   appTagline?: string;
+  appVersion?: string;
+  appGithubRepo?: string;
+  appGithubBranch?: string;
+  lastAppUpdateAt?: string;
 
   businessName: string;
   companyLogoUrl?: string;
@@ -379,6 +383,8 @@ export interface BusinessSettings {
   lastTelegramBackupAt?: string;
   lastTelegramBackupStatus?: 'success' | 'failed' | 'idle';
   lastTelegramBackupMessage?: string;
+  lastTelegramAutomatedBackupAt?: string;
+  lastTelegramDailyBackupDateWib?: string;
 }
 
 export interface RealtimeEvent {
@@ -500,6 +506,8 @@ export interface MikhmonServerConfig {
   uploadedPackages: MikhmonUploadedPackage[];
   customNginxConfig?: string;
   vhostNginxGenerated?: string;
+  customGithubRepo?: string;
+  customGithubBranch?: string;
 }
 
 export interface MikhmonVoucher {

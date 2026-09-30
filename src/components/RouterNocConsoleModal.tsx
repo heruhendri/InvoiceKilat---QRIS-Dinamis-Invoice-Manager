@@ -601,7 +601,7 @@ export const RouterNocConsoleModal: React.FC<RouterNocConsoleModalProps> = ({
         </div>
 
         {/* Hardware Status Strip */}
-        <div className="bg-slate-850 px-5 py-2.5 bg-slate-900/95 border-b border-slate-800 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-5 py-2.5 bg-slate-900/95 border-b border-slate-800 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <Cpu className="w-3.5 h-3.5 text-indigo-400" />

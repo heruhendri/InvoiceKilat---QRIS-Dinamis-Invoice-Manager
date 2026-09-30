@@ -28,8 +28,10 @@ import { CustomerPortalNavbar } from './components/CustomerPortalNavbar';
 import { AdminLogin } from './components/AdminLogin';
 import { AppWatermark } from './components/AppWatermark';
 import { FeatureGalleryModal } from './components/FeatureGalleryModal';
+import { AppGithubUpdateModal } from './components/AppGithubUpdateModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { FileText, ShieldCheck, Globe, AlertCircle, CheckCircle2, Trash2, X } from 'lucide-react';
+import { FileText, ShieldCheck, Globe, AlertCircle, CheckCircle2, Trash2, X, Sun, Moon } from 'lucide-react';
+import { useTheme } from './utils/theme';
 
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { 
@@ -47,6 +49,9 @@ import {
 import { formatRupiah, formatDateIndo } from './utils/formatters';
 
 export default function App() {
+  // Global theme management
+  const { isDark, toggleTheme } = useTheme();
+
   // Navigation & View state
   // Active Portal mode: 'admin' (pengelola) or 'customer' (pelanggan/publik)
   const [activePortal, setActivePortal] = useState<'admin' | 'customer'>('admin');
@@ -148,6 +153,8 @@ export default function App() {
     message: '',
     type: 'info',
   });
+
+  const [isAppUpdateModalOpen, setIsAppUpdateModalOpen] = useState<boolean>(false);
 
   // Fetch initial application data
   const fetchData = useCallback(async () => {
@@ -673,12 +680,12 @@ export default function App() {
     setIsSyncing(true);
     try {
       const res = await fetch('/api/spreadsheet/sync', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setAppAlert({
           isOpen: true,
           title: 'Sinkronisasi Spreadsheet Berhasil',
-          message: `Sinkronisasi Google Spreadsheet berhasil! ${data.syncedCount} baris invoice diperbarui secara realtime.`,
+          message: data.message || `Sinkronisasi Google Spreadsheet berhasil! ${data.syncedCount || data.invoicesCount || 0} baris invoice diperbarui secara realtime.`,
           type: 'success',
         });
         fetchData();
@@ -686,7 +693,7 @@ export default function App() {
         setAppAlert({
           isOpen: true,
           title: 'Sinkronisasi Gagal',
-          message: data.error || 'Periksa konfigurasi sheet ID pada menu Pengaturan.',
+          message: data.error || data.message || 'Periksa konfigurasi Google Spreadsheet pada menu Pengaturan.',
           type: 'error',
         });
       }
@@ -756,7 +763,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-slate-100/70 text-slate-800 antialiased font-sans flex flex-col">
+      <div className="min-h-screen bg-slate-100/70 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased font-sans flex flex-col transition-colors duration-200">
         {/* Offline Alert */}
         <OfflineIndicator />
 
@@ -781,7 +788,7 @@ export default function App() {
               } else if (tab === 'portal') {
                 handleSwitchToCustomerPortal();
               } else if (tab === 'spreadsheet') {
-                handleOpenSettings('backup');
+                setCurrentTab('spreadsheet');
               } else {
                 setCurrentTab(tab);
               }
@@ -802,13 +809,16 @@ export default function App() {
             adminUser={adminUser}
             onLogout={handleAdminLogout}
             onOpenGallery={() => setIsGalleryModalOpen(true)}
+            onOpenAppUpdate={() => setIsAppUpdateModalOpen(true)}
+            isDark={isDark}
+            onToggleTheme={toggleTheme}
           />
         ) : (
-          <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-md">
+          <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md transition-colors duration-200">
             <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8">
               <div className="flex items-center gap-3">
                 {settings?.appLogoUrl ? (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-200 overflow-hidden shadow-xs p-1">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs p-1">
                     <img src={settings.appLogoUrl} alt={settings?.appName || 'Logo'} className="max-h-full max-w-full object-contain" />
                   </div>
                 ) : (
@@ -817,25 +827,42 @@ export default function App() {
                   </div>
                 )}
                 <div>
-                  <h1 className="text-base font-black tracking-tight text-slate-900 leading-tight">
+                  <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white leading-tight">
                     {settings?.appName || settings?.businessName || 'InvoiceKilat'}
                   </h1>
-                  <p className="text-[11px] font-bold text-blue-600 flex items-center gap-1">
+                  <p className="text-[11px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" />
                     <span>Portal Pengelola & Keuangan</span>
                   </p>
                 </div>
               </div>
 
-              <button
-                id="header-goto-customer-portal-btn"
-                onClick={() => handleSwitchToCustomerPortal()}
-                className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50/90 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs"
-                title="Buka Portal Mandiri Pelanggan"
-              >
-                <Globe className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Portal Pelanggan</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Unauthenticated Header Theme Toggle */}
+                <button
+                  id="unauth-theme-toggle-btn"
+                  onClick={toggleTheme}
+                  className="p-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/80 text-slate-700 dark:text-amber-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition active:scale-95 shadow-2xs"
+                  title={isDark ? "Beralih ke Mode Terang (Light Mode)" : "Beralih ke Mode Gelap (Dark Mode)"}
+                  aria-label="Ganti Tema"
+                >
+                  {isDark ? (
+                    <Sun className="h-4 w-4 text-amber-400" />
+                  ) : (
+                    <Moon className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+                  )}
+                </button>
+
+                <button
+                  id="header-goto-customer-portal-btn"
+                  onClick={() => handleSwitchToCustomerPortal()}
+                  className="flex items-center gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/90 dark:bg-emerald-950/60 px-3 py-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition shadow-2xs"
+                  title="Buka Portal Mandiri Pelanggan"
+                >
+                  <Globe className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Portal Pelanggan</span>
+                </button>
+              </div>
             </div>
           </header>
         )
@@ -844,6 +871,8 @@ export default function App() {
           settings={settings}
           businessName={settings?.appName || settings?.businessName || 'InvoiceKilat'}
           onSwitchToAdmin={() => handleSwitchToAdminPortal('invoices')}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
         />
       )}
 
@@ -1101,12 +1130,24 @@ export default function App() {
         invoices={invoices}
         onTriggerSync={handleTriggerSpreadsheetSync}
         isSyncing={isSyncing}
+        onOpenAppUpdate={() => setIsAppUpdateModalOpen(true)}
       />
 
       {/* 6b. Feature Screenshots Gallery Modal */}
       <FeatureGalleryModal
         isOpen={isGalleryModalOpen}
         onClose={() => setIsGalleryModalOpen(false)}
+      />
+
+      {/* 6c. Application GitHub Update Modal */}
+      <AppGithubUpdateModal
+        isOpen={isAppUpdateModalOpen}
+        onClose={() => setIsAppUpdateModalOpen(false)}
+        settings={settings}
+        onUpdateSuccess={(updatedSettings) => {
+          setSettings((prev) => (prev ? { ...prev, ...updatedSettings } : (updatedSettings as BusinessSettings)));
+          fetchData();
+        }}
       />
 
       {/* 7. In-App Confirmation Modal (Cross-origin & Iframe Safe) */}

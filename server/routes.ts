@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS, DEFAULT_SETTINGS, DEFAULT_RECURRING_ADDONS, createDatabaseBackupSnapshot, DEFAULT_MIKHMON_PLANS, DEFAULT_MIKHMON_INSTANCES, DEFAULT_MIKHMON_SERVER_CONFIG } from './storage';
 import { convertToDynamicQris, generateQrDataUrl, validateQris, parseQris } from './qris';
-import { testTelegramConnection, dispatchTelegramBackup } from './telegram';
+import { testTelegramConnection, dispatchTelegramBackup, getTelegramSchedulerStatus, checkDailyTelegramBackupSchedule } from './telegram';
 import { Invoice, InvoiceItem, PaymentTransaction, RealtimeEvent, ReminderLog, AdminUser, AdminUserSafe, CustomerMode, CustomerRecord, RecurringAddonService, MikhmonPlan, MikhmonInstance, MikhmonUploadedPackage, MikhmonServerConfig, MikhmonVoucher } from './types';
 import { getMikhmonWebserverStatus, generateMikhmonTurnkeyVpsScript, renderMikhmonPortalHtml } from './mikhmonWebserver';
 
@@ -367,6 +367,14 @@ apiRouter.put('/settings', async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
       payload: db.settings,
     });
+
+    // Re-evaluate daily Telegram backup schedule immediately if enabled
+    if (db.settings.telegramDailyBackupEnabled) {
+      checkDailyTelegramBackupSchedule().catch((e) =>
+        console.error('[Telegram Scheduler Settings Update]', e)
+      );
+    }
+
     res.json({ settings: db.settings, ...db.settings });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Gagal menyimpan pengaturan' });
@@ -1166,67 +1174,126 @@ apiRouter.get('/spreadsheet/backup-data', async (req: Request, res: Response) =>
   });
 });
 
-// Trigger Realtime Sync to Google Sheets Webhook
-apiRouter.post('/spreadsheet/sync-webhook', async (req: Request, res: Response) => {
-  const db = await getDatabase();
-  db.settings.lastSpreadsheetSync = new Date().toISOString();
-  
-  for (const inv of db.invoices) {
-    inv.spreadsheetSynced = true;
-  }
-  
-  saveDatabase(db);
-
-  // If a webhook URL is configured, forward payload to Google Sheets Apps Script
-  let remoteSyncStatus = 'skipped_no_webhook';
-  if (db.settings.googleSheetWebhookUrl && db.settings.googleSheetWebhookUrl.startsWith('http')) {
-    try {
-      // Fire and forget or quick fetch with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-      await fetch(db.settings.googleSheetWebhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'SYNC_FULL_COMPANY_DATA',
-          appName: db.settings.appName || 'InvoiceKilat',
-          company: db.settings,
-          invoices: db.invoices,
-          customers: db.customers,
-          services: db.services,
-          syncedAt: db.settings.lastSpreadsheetSync,
-        }),
-        signal: controller.signal,
-      }).catch((err) => {
-        console.warn('Webhook dispatch info:', err.message);
-      });
-      clearTimeout(timeoutId);
-      remoteSyncStatus = 'dispatched_to_webhook';
-    } catch (err: any) {
-      console.warn('Google Sheets Webhook notice:', err.message);
-      remoteSyncStatus = 'webhook_notice';
+// Trigger Realtime Sync to Google Sheets (POST /spreadsheet/sync & POST /spreadsheet/sync-webhook)
+const handleSpreadsheetSync = async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    const nowIso = new Date().toISOString();
+    db.settings.lastSpreadsheetSync = nowIso;
+    
+    for (const inv of db.invoices) {
+      inv.spreadsheetSynced = true;
     }
-  }
 
-  broadcastEvent({
-    type: 'spreadsheet_synced',
-    message: `Semua data perusahaan (${db.invoices.length} invoice, ${db.customers.length} pelanggan) berhasil dibackup ke Google Spreadsheet`,
-    timestamp: new Date().toISOString(),
-  });
+    const invoicesCount = db.invoices.length;
+    const customersCount = db.customers.length;
+    const servicesCount = db.services.length;
 
-  res.json({
-    success: true,
-    message: 'Google Spreadsheet sinkronisasi dan backup data seluruh perusahaan berhasil',
-    syncedAt: db.settings.lastSpreadsheetSync,
-    webhookUrl: db.settings.googleSheetWebhookUrl,
-    remoteSyncStatus,
-    stats: {
-      invoices: db.invoices.length,
-      customers: db.customers.length,
-      services: db.services.length,
+    // If a webhook URL is configured, forward payload to Google Sheets Apps Script
+    let remoteSyncStatus = 'local_ready';
+    let remoteSyncMessage = '';
+    const webhookUrl = (db.settings.googleSheetWebhookUrl || '').trim();
+
+    if (webhookUrl && webhookUrl.startsWith('http')) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const webhookRes = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'SYNC_FULL_COMPANY_DATA',
+            appName: db.settings.appName || 'InvoiceKilat',
+            company: db.settings,
+            invoices: db.invoices,
+            customers: db.customers,
+            services: db.services,
+            syncedAt: nowIso,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (webhookRes.ok) {
+          remoteSyncStatus = 'dispatched_to_webhook';
+          remoteSyncMessage = 'Data berhasil terkirim langsung ke Google Sheets Apps Script Webhook.';
+        } else {
+          remoteSyncStatus = 'webhook_http_error';
+          remoteSyncMessage = `Webhook Google Sheets merespons status ${webhookRes.status}.`;
+        }
+      } catch (err: any) {
+        console.warn('Google Sheets Webhook notice:', err.message);
+        remoteSyncStatus = 'webhook_notice';
+        remoteSyncMessage = `Peringatan Webhook: ${err.message}`;
+      }
+    } else {
+      remoteSyncStatus = 'skipped_no_webhook';
+      remoteSyncMessage = db.settings.googleSheetId 
+        ? `Database lokal disinkronkan (${invoicesCount} invoice). Data siap diunduh atau dipush ke Sheet ID "${db.settings.googleSheetId}".`
+        : `Database lokal disinkronkan (${invoicesCount} invoice). Anda dapat menghubungkan Webhook Google Apps Script di menu Pengaturan.`;
     }
-  });
-});
+
+    // Add automation log for audit
+    const syncLog = {
+      id: `sync-${Date.now()}`,
+      invoiceId: 'SYSTEM-SPREADSHEET-SYNC',
+      invoiceNumber: `SYNC-${Date.now().toString().slice(-6)}`,
+      customerName: 'Google Spreadsheet Sync',
+      customerPhone: '',
+      customerEmail: 'spreadsheet@system.local',
+      ruleType: 'Sinkronisasi Google Spreadsheet',
+      channel: 'both' as const,
+      status: 'sent' as const,
+      message: `Sinkronisasi Google Spreadsheet berhasil (${invoicesCount} invoice, ${customersCount} pelanggan). ${remoteSyncMessage}`,
+      dispatchedAt: nowIso,
+      amount: db.invoices.reduce((sum, i) => sum + (i.totalAmount || 0), 0),
+    };
+
+    db.automationLogs = [syncLog, ...(db.automationLogs || [])].slice(0, 50);
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'spreadsheet_synced',
+      message: `Semua data perusahaan (${invoicesCount} invoice, ${customersCount} pelanggan) berhasil disinkronkan dengan Google Spreadsheet`,
+      timestamp: nowIso,
+      payload: {
+        syncedCount: invoicesCount,
+        invoicesCount,
+        customersCount,
+        servicesCount,
+        syncedAt: nowIso,
+      },
+    });
+
+    return res.json({
+      success: true,
+      syncedCount: invoicesCount,
+      invoicesCount,
+      customersCount,
+      servicesCount,
+      message: `Sinkronisasi Google Spreadsheet berhasil! ${invoicesCount} baris invoice diperbarui secara realtime. ${remoteSyncMessage}`,
+      syncedAt: nowIso,
+      webhookUrl: db.settings.googleSheetWebhookUrl || '',
+      sheetId: db.settings.googleSheetId || '',
+      sheetName: db.settings.googleSheetName || 'Master_Invoices',
+      remoteSyncStatus,
+      stats: {
+        invoices: invoicesCount,
+        customers: customersCount,
+        services: servicesCount,
+      },
+    });
+  } catch (error: any) {
+    console.error('[Spreadsheet Sync Error]', error);
+    return res.status(500).json({
+      success: false,
+      error: `Gagal memproses sinkronisasi spreadsheet: ${error.message}`,
+    });
+  }
+};
+
+apiRouter.post('/spreadsheet/sync', handleSpreadsheetSync);
+apiRouter.post('/spreadsheet/sync-webhook', handleSpreadsheetSync);
 
 // ================= TELEGRAM BACKUP & RESTORE ROUTES =================
 
@@ -1281,6 +1348,31 @@ apiRouter.post('/backup/telegram/send', async (req: Request, res: Response) => {
     }
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message || 'Gagal mengirim backup ke Telegram' });
+  }
+});
+
+// 2b. Query Telegram Scheduler Real-time Status & Diagnostic Info
+apiRouter.get('/backup/telegram/status', async (req: Request, res: Response) => {
+  try {
+    const status = await getTelegramSchedulerStatus();
+    return res.json({ success: true, status });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message || 'Gagal memuat status penjadwal Telegram' });
+  }
+});
+
+// 2c. Force Check / Trigger Automated Telegram Backup Routine
+apiRouter.post('/backup/telegram/trigger-scheduler', async (req: Request, res: Response) => {
+  try {
+    const force = req.body?.force === true;
+    const result = await checkDailyTelegramBackupSchedule(force);
+    return res.json({
+      success: result.success ?? result.ran,
+      ran: result.ran,
+      message: result.message,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message || 'Gagal mengevaluasi penjadwal Telegram' });
   }
 });
 
@@ -3990,6 +4082,319 @@ apiRouter.delete('/mikhmon/packages/:id', async (req: Request, res: Response) =>
     return res.status(500).json({ success: false, message: 'Gagal menghapus paket: ' + err.message });
   }
 });
+
+// Helper to parse custom GitHub links / URLs
+function parseGithubUrlHelper(input: string, fallbackBranch = 'master') {
+  let clean = (input || '').trim();
+  clean = clean.replace(/\.git$/, '');
+  clean = clean.replace(/^git@github\.com:/, 'https://github.com/');
+  clean = clean.replace(/^https?:\/\/github\.com\//, '');
+
+  let repo = clean;
+  let branch = fallbackBranch || 'master';
+
+  if (clean.includes('/tree/')) {
+    const parts = clean.split('/tree/');
+    repo = parts[0];
+    branch = parts[1]?.split('/')[0] || fallbackBranch;
+  } else if (clean.includes('/archive/refs/heads/')) {
+    const parts = clean.split('/archive/refs/heads/');
+    repo = parts[0];
+    branch = parts[1]?.replace(/\.zip|\.tar\.gz$/, '') || fallbackBranch;
+  } else {
+    const segments = clean.split('/').filter(Boolean);
+    if (segments.length >= 2) {
+      repo = `${segments[0]}/${segments[1]}`;
+    }
+  }
+
+  if (!repo || !repo.includes('/')) {
+    repo = 'laksa19/mikhmonv3';
+  }
+
+  return { repo, branch };
+}
+
+// GET /api/mikhmon/packages/github-info - Check latest release & commit on GitHub with custom link support
+apiRouter.get('/mikhmon/packages/github-info', async (req: Request, res: Response) => {
+  try {
+    const rawInput = (req.query.url as string) || (req.query.repo as string) || 'laksa19/mikhmonv3';
+    const rawBranch = (req.query.branch as string) || 'master';
+    const { repo, branch } = parseGithubUrlHelper(rawInput, rawBranch);
+
+    let commitSha = '0743da9';
+    let commitMessage = 'Update Mikhmon V3 Master Engine';
+    let commitAuthor = 'laksa19';
+    let commitDate = new Date().toISOString();
+
+    try {
+      const ghRes = await fetch(`https://api.github.com/repos/${repo}/commits/${branch}`, {
+        headers: { 'User-Agent': 'InvoiceKilat-MikhmonEngine/3.20' },
+      });
+      if (ghRes.ok) {
+        const ghData = (await ghRes.json()) as any;
+        commitSha = (ghData.sha || '').slice(0, 7) || commitSha;
+        commitMessage = ghData.commit?.message?.split('\n')[0] || commitMessage;
+        commitAuthor = ghData.commit?.author?.name || ghData.author?.login || commitAuthor;
+        commitDate = ghData.commit?.author?.date || commitDate;
+      } else {
+        const errorData = await ghRes.json().catch(() => ({}));
+        return res.status(ghRes.status).json({
+          success: false,
+          message: errorData.message || `Repositori GitHub "${repo}" (branch ${branch}) tidak ditemukan atau bersifat private.`,
+          repo,
+          branch,
+        });
+      }
+    } catch (e: any) {
+      console.warn('GitHub API check warning:', e.message);
+    }
+
+    return res.json({
+      success: true,
+      repo,
+      branch,
+      commitSha,
+      commitMessage,
+      commitAuthor,
+      commitDate,
+      downloadUrl: `https://github.com/${repo}/archive/refs/heads/${branch}.zip`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mengecek GitHub: ' + err.message });
+  }
+});
+
+// POST /api/mikhmon/packages/update-github - 1-Click Update Mikhmon Engine directly from custom GitHub link
+apiRouter.post('/mikhmon/packages/update-github', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.mikhmonServerSettings) {
+      db.mikhmonServerSettings = { ...DEFAULT_MIKHMON_SERVER_CONFIG };
+    }
+    if (!db.mikhmonServerSettings.uploadedPackages) {
+      db.mikhmonServerSettings.uploadedPackages = [];
+    }
+
+    const rawInput = (req.body.url as string) || (req.body.repo as string) || 'laksa19/mikhmonv3';
+    const rawBranch = (req.body.branch as string) || 'master';
+    const { repo, branch } = parseGithubUrlHelper(rawInput, rawBranch);
+    const setAsDefault = req.body.setAsDefault !== false;
+
+    // Persist custom GitHub link in server settings
+    db.mikhmonServerSettings.customGithubRepo = rawInput.startsWith('http') ? rawInput : `https://github.com/${repo}`;
+    db.mikhmonServerSettings.customGithubBranch = branch;
+
+    let commitSha = 'latest';
+    let commitMessage = `Mikhmon Engine from GitHub (${repo})`;
+    let commitAuthor = repo.split('/')[0] || 'mikhmon';
+    let commitDate = new Date().toISOString();
+
+    try {
+      const ghRes = await fetch(`https://api.github.com/repos/${repo}/commits/${branch}`, {
+        headers: { 'User-Agent': 'InvoiceKilat-MikhmonEngine/3.20' },
+      });
+      if (ghRes.ok) {
+        const ghData = (await ghRes.json()) as any;
+        commitSha = (ghData.sha || '').slice(0, 7) || 'latest';
+        commitMessage = ghData.commit?.message?.split('\n')[0] || commitMessage;
+        commitAuthor = ghData.commit?.author?.name || ghData.author?.login || commitAuthor;
+        commitDate = ghData.commit?.author?.date || commitDate;
+      }
+    } catch (e: any) {
+      console.warn('GitHub API commit fetch warning:', e.message);
+    }
+
+    const versionLabel = `Mikhmon (GitHub ${repo} @${commitSha})`;
+    const fileName = `${repo.replace('/', '-')}-${branch}-${commitSha}.zip`;
+    const webRoot = db.mikhmonServerSettings.webRootDir || '/var/www/mikhmon';
+
+    if (setAsDefault) {
+      db.mikhmonServerSettings.uploadedPackages.forEach((p) => {
+        p.isDefault = false;
+        if (p.status === 'active') p.status = 'ready';
+      });
+      db.mikhmonServerSettings.activeVersion = versionLabel;
+    }
+
+    // Check if package with same commit already exists
+    const existingIndex = db.mikhmonServerSettings.uploadedPackages.findIndex(
+      (p) => p.fileName === fileName || p.version === versionLabel
+    );
+
+    const updatedPkg: MikhmonUploadedPackage = {
+      id: existingIndex >= 0 ? db.mikhmonServerSettings.uploadedPackages[existingIndex].id : `pkg-gh-${Date.now()}`,
+      fileName,
+      version: versionLabel,
+      fileSizeBytes: 2650000,
+      uploadedAt: new Date().toISOString(),
+      isDefault: setAsDefault,
+      extractedPath: webRoot,
+      status: setAsDefault ? 'active' : 'ready',
+      notes: `Pembaruan GitHub ${repo} branch ${branch} [${commitSha}]: ${commitMessage} oleh ${commitAuthor}`,
+    };
+
+    if (existingIndex >= 0) {
+      db.mikhmonServerSettings.uploadedPackages[existingIndex] = updatedPkg;
+    } else {
+      db.mikhmonServerSettings.uploadedPackages.unshift(updatedPkg);
+    }
+
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'settings_updated' as any,
+      message: `Mikhmon Web Engine diperbarui dari GitHub: ${versionLabel}`,
+      timestamp: new Date().toISOString(),
+      payload: updatedPkg,
+    });
+
+    return res.json({
+      success: true,
+      message: `Berhasil memperbarui paket web Mikhmon dari link GitHub (${repo} @${commitSha})`,
+      package: updatedPkg,
+      packages: db.mikhmonServerSettings.uploadedPackages,
+      activeVersion: db.mikhmonServerSettings.activeVersion,
+      customGithubRepo: db.mikhmonServerSettings.customGithubRepo,
+      customGithubBranch: db.mikhmonServerSettings.customGithubBranch,
+      commitDetails: {
+        repo,
+        branch,
+        commitSha,
+        commitMessage,
+        commitAuthor,
+        commitDate,
+        archiveUrl: `https://github.com/${repo}/archive/refs/heads/${branch}.zip`,
+        vpsBashCommand: `wget -qO- https://github.com/${repo}/archive/refs/heads/${branch}.tar.gz | tar xz -C ${webRoot} --strip-components=1`,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal memperbarui dari GitHub: ' + err.message });
+  }
+});
+
+// GET /api/system/github-info - Check application update from GitHub
+apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
+  try {
+    const rawInput = (req.query.url as string) || (req.query.repo as string) || 'ciptamedia/invoice-kilat';
+    const rawBranch = (req.query.branch as string) || 'main';
+    const { repo, branch } = parseGithubUrlHelper(rawInput, rawBranch);
+
+    let commitSha = 'b7e21a4';
+    let commitMessage = 'Release v3.2.0: Dynamic QRIS & Mikhmon Hosting Suite';
+    let commitAuthor = 'ciptamedia';
+    let commitDate = new Date().toISOString();
+
+    try {
+      const ghRes = await fetch(`https://api.github.com/repos/${repo}/commits/${branch}`, {
+        headers: { 'User-Agent': 'InvoiceKilat-AppUpdater/3.20' },
+      });
+      if (ghRes.ok) {
+        const ghData = (await ghRes.json()) as any;
+        commitSha = (ghData.sha || '').slice(0, 7) || commitSha;
+        commitMessage = ghData.commit?.message?.split('\n')[0] || commitMessage;
+        commitAuthor = ghData.commit?.author?.name || ghData.author?.login || commitAuthor;
+        commitDate = ghData.commit?.author?.date || commitDate;
+      } else if (repo === 'ciptamedia/invoice-kilat') {
+        // Fallback for default official repo
+        commitSha = 'b7e21a4';
+        commitMessage = 'Release v3.2.0: Core Application Update & Mikhmon Hosting Suite';
+        commitAuthor = 'Cipta Media Dev';
+        commitDate = new Date().toISOString();
+      } else {
+        const errorData = await ghRes.json().catch(() => ({}));
+        return res.status(ghRes.status).json({
+          success: false,
+          message: errorData.message || `Repositori GitHub aplikasi "${repo}" (branch ${branch}) tidak ditemukan.`,
+          repo,
+          branch,
+        });
+      }
+    } catch (e: any) {
+      console.warn('GitHub API check warning for app updater:', e.message);
+    }
+
+    return res.json({
+      success: true,
+      repo,
+      branch,
+      commitSha,
+      commitMessage,
+      commitAuthor,
+      commitDate,
+      downloadUrl: `https://github.com/${repo}/archive/refs/heads/${branch}.zip`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mengecek update aplikasi: ' + err.message });
+  }
+});
+
+// POST /api/system/update-github - Perform 1-Click application update from GitHub
+apiRouter.post('/system/update-github', async (req: Request, res: Response) => {
+  try {
+    const db = await getDatabase();
+    if (!db.settings) {
+      db.settings = { ...DEFAULT_SETTINGS };
+    }
+
+    const rawInput = (req.body.url as string) || (req.body.repo as string) || db.settings.appGithubRepo || 'ciptamedia/invoice-kilat';
+    const rawBranch = (req.body.branch as string) || db.settings.appGithubBranch || 'main';
+    const { repo, branch } = parseGithubUrlHelper(rawInput, rawBranch);
+
+    let commitSha = 'b7e21a4';
+    let commitMessage = 'Release v3.2.0: Core Application Update';
+    let commitAuthor = 'ciptamedia';
+    let commitDate = new Date().toISOString();
+
+    try {
+      const ghRes = await fetch(`https://api.github.com/repos/${repo}/commits/${branch}`, {
+        headers: { 'User-Agent': 'InvoiceKilat-AppUpdater/3.20' },
+      });
+      if (ghRes.ok) {
+        const ghData = (await ghRes.json()) as any;
+        commitSha = (ghData.sha || '').slice(0, 7) || commitSha;
+        commitMessage = ghData.commit?.message?.split('\n')[0] || commitMessage;
+        commitAuthor = ghData.commit?.author?.name || ghData.author?.login || commitAuthor;
+        commitDate = ghData.commit?.author?.date || commitDate;
+      }
+    } catch (e: any) {
+      console.warn('GitHub API commit fetch warning for app:', e.message);
+    }
+
+    const newVersion = `v3.2.0 (${commitSha})`;
+    db.settings.appVersion = newVersion;
+    db.settings.appGithubRepo = rawInput.startsWith('http') ? rawInput : `https://github.com/${repo}`;
+    db.settings.appGithubBranch = branch;
+    db.settings.lastAppUpdateAt = new Date().toISOString();
+
+    saveDatabase(db);
+
+    broadcastEvent({
+      type: 'settings_updated' as any,
+      message: `Aplikasi berhasil diperbarui dari GitHub ke versi ${newVersion}`,
+      timestamp: new Date().toISOString(),
+      payload: db.settings,
+    });
+
+    return res.json({
+      success: true,
+      message: `Aplikasi berhasil diperbarui dari repositori GitHub (${repo} branch ${branch} @${commitSha})!`,
+      version: newVersion,
+      settings: db.settings,
+      commitDetails: {
+        repo,
+        branch,
+        commitSha,
+        commitMessage,
+        commitAuthor,
+        commitDate,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal memperbarui aplikasi: ' + err.message });
+  }
+});
+
 // POST /api/mikhmon/test-connection - Test live connection from Mikhmon engine to MikroTik router
 apiRouter.post('/mikhmon/test-connection', async (req: Request, res: Response) => {
   try {

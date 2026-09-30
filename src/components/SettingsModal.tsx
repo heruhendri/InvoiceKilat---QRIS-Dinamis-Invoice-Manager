@@ -45,7 +45,8 @@ import {
   ArrowUpRight,
   HardDrive,
   FileUp,
-  MapPin
+  MapPin,
+  Github
 } from 'lucide-react';
 import { Invoice, BusinessSettings } from '../types';
 import { QRISImageUploader } from './QRISImageUploader';
@@ -62,6 +63,7 @@ interface SettingsModalProps {
   invoices?: Invoice[];
   onTriggerSync?: () => Promise<void> | void;
   isSyncing?: boolean;
+  onOpenAppUpdate?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -74,6 +76,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   invoices = [],
   onTriggerSync,
   isSyncing = false,
+  onOpenAppUpdate,
 }) => {
   const [activeTab, setActiveTab] = useState<'app' | 'company' | 'template' | 'qris' | 'backup' | 'notification'>(initialTab);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -181,6 +184,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [lastTelegramBackupAt, setLastTelegramBackupAt] = useState(settings?.lastTelegramBackupAt || '');
   const [lastTelegramBackupStatus, setLastTelegramBackupStatus] = useState(settings?.lastTelegramBackupStatus || 'idle');
   const [lastTelegramBackupMessage, setLastTelegramBackupMessage] = useState(settings?.lastTelegramBackupMessage || '');
+  const [lastTelegramAutomatedBackupAt, setLastTelegramAutomatedBackupAt] = useState(settings?.lastTelegramAutomatedBackupAt || '');
+  const [lastTelegramDailyBackupDateWib, setLastTelegramDailyBackupDateWib] = useState(settings?.lastTelegramDailyBackupDateWib || '');
+  const [telegramSchedulerInfo, setTelegramSchedulerInfo] = useState<{
+    isRunning: boolean;
+    enabled: boolean;
+    configured: boolean;
+    targetTimeWib: string;
+    currentWibTime: string;
+    currentWibDate: string;
+    lastDailyBackupDateWib: string;
+    lastAutomatedBackupAt: string;
+    nextScheduledRunWib: string;
+    lastStatus: string;
+    lastMessage: string;
+  } | null>(null);
+  const [isTriggeringScheduler, setIsTriggeringScheduler] = useState(false);
   const [showBotToken, setShowBotToken] = useState(false);
   const [showTelegramGuide, setShowTelegramGuide] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
@@ -306,6 +325,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setLastTelegramBackupAt(settings.lastTelegramBackupAt || '');
       setLastTelegramBackupStatus(settings.lastTelegramBackupStatus || 'idle');
       setLastTelegramBackupMessage(settings.lastTelegramBackupMessage || '');
+      setLastTelegramAutomatedBackupAt(settings.lastTelegramAutomatedBackupAt || '');
+      setLastTelegramDailyBackupDateWib(settings.lastTelegramDailyBackupDateWib || '');
+    }
+
+    if (isOpen) {
+      fetch('/api/backup/telegram/status')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.success && data.status) {
+            setTelegramSchedulerInfo(data.status);
+          }
+        })
+        .catch(() => {});
     }
   }, [settings, isOpen]);
 
@@ -507,6 +539,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         lastTelegramBackupAt,
         lastTelegramBackupStatus,
         lastTelegramBackupMessage,
+        lastTelegramAutomatedBackupAt,
+        lastTelegramDailyBackupDateWib,
       });
       setSavedSuccess(true);
       setTimeout(() => {
@@ -605,6 +639,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       });
     } finally {
       setIsSendingTelegramNow(false);
+    }
+  };
+
+  // Test / Trigger Automated Telegram Backup Routine
+  const handleTriggerSchedulerTest = async () => {
+    setIsTriggeringScheduler(true);
+    setTelegramSendFeedback(null);
+    try {
+      const res = await fetch('/api/backup/telegram/trigger-scheduler', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTelegramSendFeedback({
+          success: true,
+          message: data.message || 'Eksekusi rutin backup harian Telegram berhasil dijalankan!',
+        });
+        // Refresh live scheduler status
+        const statusRes = await fetch('/api/backup/telegram/status');
+        const statusData = await statusRes.json();
+        if (statusData.success && statusData.status) {
+          setTelegramSchedulerInfo(statusData.status);
+          if (statusData.status.lastAutomatedBackupAt) {
+            setLastTelegramAutomatedBackupAt(statusData.status.lastAutomatedBackupAt);
+          }
+          if (statusData.status.lastDailyBackupDateWib) {
+            setLastTelegramDailyBackupDateWib(statusData.status.lastDailyBackupDateWib);
+          }
+          if (statusData.status.lastStatus) {
+            setLastTelegramBackupStatus(statusData.status.lastStatus);
+          }
+          if (statusData.status.lastMessage) {
+            setLastTelegramBackupMessage(statusData.status.lastMessage);
+          }
+        }
+      } else {
+        setTelegramSendFeedback({
+          success: false,
+          message: data.message || 'Eksekusi penjadwal otomatis Telegram belum berhasil.',
+        });
+      }
+    } catch (err: any) {
+      setTelegramSendFeedback({
+        success: false,
+        message: err.message || 'Gagal menghubungi server.',
+      });
+    } finally {
+      setIsTriggeringScheduler(false);
     }
   };
 
@@ -939,6 +1023,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* GitHub App Update Section */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white shadow-lg space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-white/10 text-white border border-white/20">
+                      <Github className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-black text-sm text-white">
+                          Pembaruan Aplikasi dari GitHub
+                        </h4>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/30 text-blue-200 border border-blue-400/30 font-bold">
+                          {settings?.appVersion || 'v3.2.0-stable'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Tarik pembaruan fitur terbaru, patch keamanan, dan perbaikan bug langsung dari repositori resmi atau fork GitHub Anda.
+                      </p>
+                    </div>
+                  </div>
+
+                  {onOpenAppUpdate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenAppUpdate();
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-black text-xs transition flex items-center justify-center gap-2 shadow-md active:scale-95 shrink-0"
+                    >
+                      <Github className="w-4 h-4 text-slate-900" />
+                      <span>Update Aplikasi dari GitHub</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1728,6 +1850,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="font-semibold text-white text-[11px] truncate block">
                       {telegramDailyBackupEnabled ? `Harian @ ${telegramDailyBackupTime} WIB` : 'Manual / Nonaktif'}
                     </span>
+                    <span className="text-[10px] text-emerald-400 font-medium block truncate mt-0.5">
+                      {telegramSchedulerInfo?.nextScheduledRunWib || (telegramDailyBackupEnabled ? 'Aktif' : 'Nonaktif')}
+                    </span>
                   </div>
                   <div className="bg-white/5 rounded-xl p-2 border border-white/10">
                     <span className="text-[10px] text-slate-400 block">Status Terakhir:</span>
@@ -1736,17 +1861,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}>
                       {lastTelegramBackupStatus === 'success' ? 'Berhasil Terkirim' : lastTelegramBackupStatus === 'failed' ? 'Gagal Terkirim' : 'Belum Ada'}
                     </span>
+                    <span className="text-[10px] text-slate-400 truncate block mt-0.5">
+                      {telegramSchedulerInfo?.lastDailyBackupDateWib === telegramSchedulerInfo?.currentWibDate
+                        ? '✅ Backup hari ini tuntas'
+                        : telegramDailyBackupEnabled ? '⏳ Menunggu jadwal hari ini' : 'Otomasi nonaktif'}
+                    </span>
                   </div>
                   <div className="bg-white/5 rounded-xl p-2 border border-white/10">
                     <span className="text-[10px] text-slate-400 block">Waktu Terakhir:</span>
                     <span className="font-semibold text-white text-[11px] truncate block">
-                      {lastTelegramBackupAt ? formatDateTimeIndo(lastTelegramBackupAt) : 'Belum Pernah'}
+                      {lastTelegramAutomatedBackupAt ? formatDateTimeIndo(lastTelegramAutomatedBackupAt) : (lastTelegramBackupAt ? formatDateTimeIndo(lastTelegramBackupAt) : 'Belum Pernah')}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
+                      {lastTelegramAutomatedBackupAt ? 'Otomatis Harian' : (lastTelegramBackupAt ? 'Manual' : '-')}
                     </span>
                   </div>
                   <div className="bg-white/5 rounded-xl p-2 border border-white/10">
-                    <span className="text-[10px] text-slate-400 block">Data Sistem:</span>
-                    <span className="font-semibold text-white text-[11px] truncate block">
-                      {invoices.length} Invoice • {settings?.businessName || 'Profil Bisnis'}
+                    <span className="text-[10px] text-slate-400 block">Waktu Sistem (WIB):</span>
+                    <span className="font-semibold text-white text-[11px] truncate block font-mono">
+                      {telegramSchedulerInfo?.currentWibTime ? `${telegramSchedulerInfo.currentWibTime} WIB` : 'Zona WIB (UTC+7)'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block mt-0.5 truncate">
+                      {invoices.length} Invoice • {settings?.businessName || 'Sistem Aktif'}
                     </span>
                   </div>
                 </div>
@@ -2075,17 +2211,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Action Buttons: Test Connection & Send Now */}
-                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-                      <button
-                        type="button"
-                        onClick={handleTestTelegram}
-                        disabled={isTestingTelegram || !telegramBotToken || !telegramChatId}
-                        className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isTestingTelegram ? 'animate-spin' : ''}`} />
-                        <span>{isTestingTelegram ? 'Menguji Bot...' : 'Tes Koneksi Bot Telegram'}</span>
-                      </button>
+                    {/* Action Buttons: Test Connection, Test Scheduler Routine & Send Now */}
+                    <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2.5 flex-wrap">
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button
+                          type="button"
+                          onClick={handleTestTelegram}
+                          disabled={isTestingTelegram || !telegramBotToken || !telegramChatId}
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition disabled:opacity-50"
+                          title="Kirim pesan tes sederhana untuk memastikan bot token dan chat ID terhubung"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isTestingTelegram ? 'animate-spin' : ''}`} />
+                          <span>{isTestingTelegram ? 'Menguji...' : 'Tes Bot'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleTriggerSchedulerTest}
+                          disabled={isTriggeringScheduler || !telegramBotToken || !telegramChatId}
+                          className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 text-xs font-bold transition disabled:opacity-50"
+                          title="Simulasikan dan uji eksekusi pipeline backup harian otomatis sekarang"
+                        >
+                          <Clock className={`w-3.5 h-3.5 text-amber-600 ${isTriggeringScheduler ? 'animate-spin' : ''}`} />
+                          <span>{isTriggeringScheduler ? 'Memproses...' : 'Uji Rutin Otomasi'}</span>
+                        </button>
+                      </div>
 
                       <button
                         type="button"
@@ -2094,7 +2244,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition active:scale-95 disabled:opacity-50"
                       >
                         <Send className={`w-3.5 h-3.5 ${isSendingTelegramNow ? 'animate-spin' : ''}`} />
-                        <span>{isSendingTelegramNow ? 'Mengirim Cadangan...' : 'Kirim Cadangan ke Telegram Sekarang'}</span>
+                        <span>{isSendingTelegramNow ? 'Mengirim Cadangan...' : 'Kirim Cadangan Sekarang'}</span>
                       </button>
                     </div>
                   </div>

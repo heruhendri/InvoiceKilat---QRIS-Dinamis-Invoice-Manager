@@ -71,6 +71,9 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   appName: 'InvoiceKilat',
   appLogoUrl: '',
   appTagline: 'Sistem Faktur & QRIS Dinamis Otomatis',
+  appVersion: 'v3.2.0-stable',
+  appGithubRepo: 'https://github.com/ciptamedia/invoice-kilat',
+  appGithubBranch: 'main',
 
   businessName: 'PT Cipta Media Nusantara',
   companyLogoUrl: '',
@@ -470,6 +473,8 @@ export const DEFAULT_MIKHMON_SERVER_CONFIG: MikhmonServerConfig = {
     }
   ],
   customNginxConfig: '',
+  customGithubRepo: 'https://github.com/laksa19/mikhmonv3',
+  customGithubBranch: 'master',
 };
 
 const DEFAULT_CUSTOMERS: CustomerRecord[] = [

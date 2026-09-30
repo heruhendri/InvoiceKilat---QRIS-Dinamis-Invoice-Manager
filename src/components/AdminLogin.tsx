@@ -118,30 +118,30 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
               <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
               Area Khusus Pengelola Usaha
             </span>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+            <h1 className="mt-2 text-2xl font-black tracking-tight text-slate-900 dark:text-white">
               Masuk Portal Admin
             </h1>
-            <p className="text-xs text-slate-500 font-medium">
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
               Sistem Penagihan, Analitik Keuangan & QRIS Dinamis {businessName}
             </p>
           </div>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/60 border border-slate-200/80 space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/60 dark:shadow-none border border-slate-200/80 dark:border-slate-800 space-y-4">
           {/* Quick Access One-Click Button */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/50 to-sky-50 border border-blue-200/80 space-y-2.5">
+          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-blue-50 dark:from-slate-800/80 via-indigo-50/50 dark:via-indigo-950/40 to-sky-50 dark:to-slate-800/80 border border-blue-200/80 dark:border-slate-700 space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-blue-900 flex items-center gap-1.5">
+              <span className="text-xs font-black text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
                 <Zap className="w-4 h-4 text-amber-500 fill-amber-400" />
                 Akses Cepat 1-Klik (Langsung Masuk)
               </span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                 Siap Pakai
               </span>
             </div>
-            <p className="text-[11px] text-blue-700/90 leading-tight">
+            <p className="text-[11px] text-blue-700/90 dark:text-slate-400 leading-tight">
               Klik tombol di bawah ini untuk langsung masuk sebagai Super Admin tanpa perlu mengetik kata sandi secara manual.
             </p>
             <div className="grid grid-cols-2 gap-2 pt-1">
@@ -160,7 +160,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                 id="btn-quick-login-heru"
                 onClick={() => handleQuickBypassLogin('heruu2004')}
                 disabled={isLoading}
-                className="py-2.5 px-3 rounded-xl bg-white border border-blue-300 hover:bg-blue-50 active:scale-95 text-blue-900 font-bold text-xs shadow-2xs transition flex items-center justify-center gap-1.5"
+                className="py-2.5 px-3 rounded-xl bg-white dark:bg-slate-800 border border-blue-300 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-slate-700 active:scale-95 text-blue-900 dark:text-blue-300 font-bold text-xs shadow-2xs transition flex items-center justify-center gap-1.5"
               >
                 <span>Masuk Heru</span>
               </button>
@@ -168,26 +168,26 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
           </div>
 
           {errorMessage && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 flex items-start gap-2.5 text-rose-800 text-xs animate-shake">
+            <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 flex items-start gap-2.5 text-rose-800 dark:text-rose-300 text-xs animate-shake">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               <div className="font-medium leading-relaxed">{errorMessage}</div>
             </div>
           )}
 
           <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-slate-200"></div>
+            <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
             <span className="flex-shrink mx-3 text-[10px] uppercase font-bold text-slate-400">Atau Masuk Manual</span>
-            <div className="flex-grow border-t border-slate-200"></div>
+            <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username / Email Input */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-700">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   Username atau Alamat Email
                 </label>
-                <span className="text-[11px] text-blue-600 font-semibold cursor-pointer hover:underline" onClick={() => { setUsername('admin'); setPassword('admin123'); }}>
+                <span className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold cursor-pointer hover:underline" onClick={() => { setUsername('admin'); setPassword('admin123'); }}>
                   Gunakan: admin
                 </span>
               </div>
@@ -201,7 +201,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="admin atau email@ciptamedia.id"
-                  className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition bg-slate-50/50 hover:bg-white font-medium"
+                  className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition bg-slate-50/50 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-900 dark:text-white font-medium"
                 />
               </div>
             </div>
@@ -209,11 +209,11 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
             {/* Password Input */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-700">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                   Kata Sandi (Password)
                 </label>
                 <span className="text-[11px] text-slate-400 font-medium">
-                  Default: <code className="text-blue-600 bg-blue-50 px-1 rounded font-mono">admin123</code>
+                  Default: <code className="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1 rounded font-mono">admin123</code>
                 </span>
               </div>
               <div className="relative">
@@ -226,12 +226,12 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Masukkan kata sandi..."
-                  className="w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition bg-slate-50/50 hover:bg-white font-medium"
+                  className="w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900/40 transition bg-slate-50/50 dark:bg-slate-800/80 hover:bg-white dark:hover:bg-slate-800 text-slate-900 dark:text-white font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition"
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition"
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -246,9 +246,9 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                  className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4"
                 />
-                <span className="text-xs text-slate-600 font-medium">
+                <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">
                   Ingat sesi masuk (30 hari)
                 </span>
               </label>
@@ -258,7 +258,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 active:scale-[0.99] text-white font-bold text-sm shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
               {isLoading ? (
                 <>
@@ -279,7 +279,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
         <div className="text-center">
           <button
             onClick={onGoToCustomerPortal}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-emerald-700 bg-white/80 hover:bg-white px-4 py-2 rounded-full border border-slate-200 shadow-2xs transition active:scale-95"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-400 bg-white/80 dark:bg-slate-900 hover:bg-white dark:hover:bg-slate-800 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-800 shadow-2xs transition active:scale-95"
           >
             <QrCode className="w-3.5 h-3.5 text-emerald-600" />
             <span>Bukan Pengelola? Buka <strong>Portal Tagihan Pelanggan</strong></span>

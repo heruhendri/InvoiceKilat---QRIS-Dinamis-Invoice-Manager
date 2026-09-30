@@ -10,19 +10,87 @@ function escapeHtml(text: string): string {
 }
 
 /**
- * Format date in Indonesian locale (WIB / Jakarta)
+ * Safely truncate HTML text without leaving unclosed tags or cut entities
+ * to prevent Telegram API 400 Bad Request "can't parse entities: Unmatched end tag"
  */
-function getIndoFormattedNow(): { dateStr: string; displayStr: string; timeStr: string } {
-  const now = new Date();
-  // Format for filename YYYY-MM-DD_HHmm
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const h = String(now.getHours()).padStart(2, '0');
-  const min = String(now.getMinutes()).padStart(2, '0');
+function truncateHtmlSafely(html: string, maxLen = 950): string {
+  if (html.length <= maxLen) return html;
 
-  const dateStr = `${y}-${m}-${d}_${h}${min}`;
-  const timeStr = `${h}:${min}`;
+  // Cut string before maxLen
+  let truncated = html.slice(0, maxLen);
+  // Avoid cutting in the middle of an entity (like &amp;)
+  truncated = truncated.replace(/&[a-z0-9#]*$/i, '');
+  // Avoid cutting in the middle of an HTML tag (like <b... or </span...)
+  truncated = truncated.replace(/<[^>]*$/, '');
+
+  // Track all unclosed tags
+  const openTags: string[] = [];
+  const tagRegex = /<\/?([a-z0-9]+)[^>]*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = tagRegex.exec(truncated)) !== null) {
+    const fullTag = match[0];
+    const tagName = match[1].toLowerCase();
+    if (fullTag.startsWith('</')) {
+      const lastIndex = openTags.lastIndexOf(tagName);
+      if (lastIndex !== -1) {
+        openTags.splice(lastIndex, 1);
+      }
+    } else if (!fullTag.endsWith('/>')) {
+      openTags.push(tagName);
+    }
+  }
+
+  // Close all remaining open tags in reverse order
+  while (openTags.length > 0) {
+    const tag = openTags.pop();
+    truncated += `</${tag}>`;
+  }
+
+  return truncated;
+}
+
+/**
+ * Format current Date & Time in Western Indonesian Time (WIB / Asia/Jakarta / UTC+7)
+ * Guaranteed reliable across all server runtime environments (containers, VPS, cloud).
+ */
+export function getWibDateTime(date = new Date()): {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  dateStr: string; // YYYY-MM-DD in WIB
+  timeStr: string; // HH:mm in WIB
+  displayStr: string; // e.g. "Rabu, 30 September 2026 19:42 WIB"
+} {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const map: Record<string, string> = {};
+  for (const part of parts) {
+    map[part.type] = part.value;
+  }
+
+  const year = parseInt(map.year, 10);
+  const month = parseInt(map.month, 10);
+  const day = parseInt(map.day, 10);
+  let hour = parseInt(map.hour, 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(map.minute, 10);
+  const second = parseInt(map.second, 10);
+
+  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 
   const monthsIndo = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -30,9 +98,23 @@ function getIndoFormattedNow(): { dateStr: string; displayStr: string; timeStr: 
   ];
   const daysIndo = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-  const displayStr = `${daysIndo[now.getDay()]}, ${now.getDate()} ${monthsIndo[now.getMonth()]} ${y} ${h}:${min} WIB`;
+  // Day of week in Asia/Jakarta
+  const wibEquivalent = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  const dayName = daysIndo[wibEquivalent.getUTCDay()];
 
-  return { dateStr, displayStr, timeStr };
+  const displayStr = `${dayName}, ${day} ${monthsIndo[month - 1]} ${year} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} WIB`;
+
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    dateStr,
+    timeStr,
+    displayStr,
+  };
 }
 
 /**
@@ -60,7 +142,7 @@ export async function sendTelegramMessage(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chat,
-        text,
+        text: truncateHtmlSafely(text, 4000),
         parse_mode: 'HTML',
         disable_web_page_preview: true,
       }),
@@ -120,7 +202,7 @@ export async function sendTelegramDocument(
     // Modern Node.js FormData & Blob
     const formData = new FormData();
     formData.append('chat_id', chat);
-    formData.append('caption', caption.slice(0, 1024)); // Telegram caption limit 1024 chars
+    formData.append('caption', truncateHtmlSafely(caption, 950));
     formData.append('parse_mode', 'HTML');
 
     const fileBlob = new Blob([documentBuffer], { type: 'application/json' });
@@ -168,7 +250,7 @@ export function generateTelegramBackupSummary(
   db: DatabaseSchema,
   triggerType: 'manual' | 'daily_automated' = 'manual'
 ): string {
-  const { displayStr } = getIndoFormattedNow();
+  const { displayStr } = getWibDateTime();
   const appName = escapeHtml(db.settings.appName || 'InvoiceKilat');
   const businessName = escapeHtml(db.settings.businessName || 'PT Cipta Media Nusantara');
 
@@ -199,18 +281,14 @@ export function generateTelegramBackupSummary(
 📅 <b>Waktu:</b> ${displayStr}
 
 📊 <b>Ringkasan Database:</b>
-• 📄 <b>Total Invoice:</b> ${totalInvoices} tagihan
-  - Lunas: ${paidInvoices.length}
-  - Menunggu: ${pendingInvoices.length}
-  - Jatuh Tempo: ${overdueInvoices.length}
-  - Sebagian: ${partialInvoices.length}
+• 📄 <b>Total Invoice:</b> ${totalInvoices} tagihan (Lunas: ${paidInvoices.length}, Pending: ${pendingInvoices.length}, Lewat Tempo: ${overdueInvoices.length})
 • 💰 <b>Total Pemasukan:</b> Rp ${totalRevenue.toLocaleString('id-ID')}
 • ⏳ <b>Total Piutang:</b> Rp ${totalOutstanding.toLocaleString('id-ID')}
-• 👥 <b>Pelanggan Terdaftar:</b> ${customers.length} klien
-• 🛠️ <b>Katalog Jasa &amp; Addon:</b> ${services.length + addons.length} item
+• 👥 <b>Pelanggan:</b> ${customers.length} klien
+• 🛠️ <b>Katalog Layanan:</b> ${services.length + addons.length} item
 • ⚡ <b>Aturan Otomasi:</b> ${rules.length} aturan aktif
 
-💾 <i>File cadangan JSON database terlampir. Anda dapat memulihkan (restore) seluruh data kapan saja melalui menu <b>Pengaturan &gt; Backup &amp; Restore</b>.</i>`;
+💾 <i>File cadangan JSON database terlampir. Anda dapat memulihkan (restore) seluruh data kapan saja via menu <b>Pengaturan &gt; Backup &amp; Restore</b>.</i>`;
 }
 
 /**
@@ -250,9 +328,9 @@ export async function dispatchTelegramBackup(options?: {
     return { success: false, message: msg };
   }
 
-  const { dateStr, displayStr } = getIndoFormattedNow();
+  const { dateStr, timeStr, displayStr } = getWibDateTime();
   const cleanAppName = (db.settings.appName || 'InvoiceKilat').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const filename = `${cleanAppName}_Backup_${dateStr}.json`;
+  const filename = `${cleanAppName}_Backup_${dateStr}_${timeStr.replace(':', '')}.json`;
 
   const summary = generateTelegramBackupSummary(db, triggerType);
 
@@ -262,6 +340,7 @@ export async function dispatchTelegramBackup(options?: {
     appName: db.settings.appName || 'InvoiceKilat',
     company: db.settings.businessName || 'PT Cipta Media Nusantara',
     exportedAt: new Date().toISOString(),
+    wibExportedAt: displayStr,
     trigger: triggerType,
     settings: db.settings,
     invoices: db.invoices || [],
@@ -296,9 +375,15 @@ export async function dispatchTelegramBackup(options?: {
   const nowIso = new Date().toISOString();
 
   if (sendResult.success) {
-    db.settings.lastTelegramBackupAt = nowIso;
+    if (triggerType === 'daily_automated') {
+      db.settings.lastTelegramAutomatedBackupAt = nowIso;
+      db.settings.lastTelegramDailyBackupDateWib = dateStr;
+    } else {
+      db.settings.lastTelegramBackupAt = nowIso;
+    }
+
     db.settings.lastTelegramBackupStatus = 'success';
-    db.settings.lastTelegramBackupMessage = `Backup berhasil dikirim ke Telegram (${displayStr})`;
+    db.settings.lastTelegramBackupMessage = `${triggerType === 'daily_automated' ? 'Backup harian otomatis' : 'Backup manual'} berhasil dikirim ke Telegram (${displayStr})`;
 
     // Append to automation logs for tracking
     const autoLog = {
@@ -310,7 +395,7 @@ export async function dispatchTelegramBackup(options?: {
       customerEmail: 'telegram-backup@system.local',
       ruleType: triggerType === 'daily_automated' ? 'Backup Harian Otomatis Telegram' : 'Backup Manual Telegram',
       channel: 'both' as const,
-      status: 'generated' as const,
+      status: 'sent' as const,
       message: `File database ${filename} (${Math.round(jsonBuffer.length / 1024)} KB) berhasil dikirim ke Telegram Chat ID ${chatId}`,
       dispatchedAt: nowIso,
       amount: exportPayload.invoices.reduce((sum: number, i: any) => sum + (i.totalAmount || 0), 0),
@@ -325,6 +410,7 @@ export async function dispatchTelegramBackup(options?: {
       timestamp: nowIso,
       payload: {
         filename,
+        triggerType,
         invoicesCount: exportPayload.invoices.length,
         customersCount: exportPayload.customers.length,
         sizeKb: Math.round(jsonBuffer.length / 1024),
@@ -339,6 +425,7 @@ export async function dispatchTelegramBackup(options?: {
         invoices: exportPayload.invoices.length,
         customers: exportPayload.customers.length,
         services: exportPayload.services.length,
+        totalRevenue: exportPayload.invoices.reduce((sum: number, i: any) => sum + (i.paidAmount || 0), 0),
         filename,
         fileSizeKb: Math.round(jsonBuffer.length / 1024),
       },
@@ -361,7 +448,7 @@ export async function testTelegramConnection(
   botToken: string,
   chatId: string
 ): Promise<{ success: boolean; message: string }> {
-  const { displayStr } = getIndoFormattedNow();
+  const { displayStr } = getWibDateTime();
   const db = await getDatabase();
   const appName = escapeHtml(db.settings.appName || 'InvoiceKilat');
   const businessName = escapeHtml(db.settings.businessName || 'Perusahaan');
@@ -379,12 +466,163 @@ Sistem <b>${appName}</b> (${businessName}) berhasil terhubung dengan akun / grup
   return await sendTelegramMessage(botToken, chatId, testMessage);
 }
 
-// Global scheduler timer tracking
+// Global scheduler state tracking
 let schedulerInterval: NodeJS.Timeout | null = null;
+let isBackupInProgress = false;
+let retryAttemptCount = 0;
+let lastRetryAt: number = 0;
+
+/**
+ * Diagnostic status for the Telegram Backup Scheduler
+ */
+export async function getTelegramSchedulerStatus(): Promise<{
+  isRunning: boolean;
+  enabled: boolean;
+  configured: boolean;
+  targetTimeWib: string;
+  currentWibTime: string;
+  currentWibDate: string;
+  lastDailyBackupDateWib: string;
+  lastAutomatedBackupAt: string;
+  lastBackupAt: string;
+  lastStatus: string;
+  lastMessage: string;
+  nextScheduledRunWib: string;
+}> {
+  const db = await getDatabase();
+  const settings = db.settings;
+  const wibNow = getWibDateTime();
+
+  const botToken = (settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '').trim();
+  const chatId = (settings.telegramChatId || process.env.TELEGRAM_CHAT_ID || '').trim();
+  const targetTime = (settings.telegramDailyBackupTime || '00:00').trim();
+
+  const [targetHStr, targetMStr] = targetTime.split(':');
+  const targetHour = parseInt(targetHStr || '0', 10);
+  const targetMinute = parseInt(targetMStr || '0', 10);
+
+  const currentMinutesOfDay = wibNow.hour * 60 + wibNow.minute;
+  const targetMinutesOfDay = targetHour * 60 + targetMinute;
+  const alreadyRanToday = settings.lastTelegramDailyBackupDateWib === wibNow.dateStr;
+
+  let nextScheduledRunWib = 'Otomasi dinonaktifkan';
+  if (settings.telegramDailyBackupEnabled && botToken && chatId) {
+    if (alreadyRanToday) {
+      nextScheduledRunWib = `Besok pukul ${targetTime} WIB`;
+    } else if (currentMinutesOfDay < targetMinutesOfDay) {
+      nextScheduledRunWib = `Hari ini pukul ${targetTime} WIB`;
+    } else {
+      nextScheduledRunWib = `Segera berjalan hari ini (${targetTime} WIB)`;
+    }
+  }
+
+  return {
+    isRunning: schedulerInterval !== null,
+    enabled: !!settings.telegramDailyBackupEnabled,
+    configured: !!(botToken && chatId),
+    targetTimeWib: targetTime,
+    currentWibTime: wibNow.timeStr,
+    currentWibDate: wibNow.dateStr,
+    lastDailyBackupDateWib: settings.lastTelegramDailyBackupDateWib || '',
+    lastAutomatedBackupAt: settings.lastTelegramAutomatedBackupAt || '',
+    lastBackupAt: settings.lastTelegramBackupAt || '',
+    lastStatus: settings.lastTelegramBackupStatus || 'idle',
+    lastMessage: settings.lastTelegramBackupMessage || '',
+    nextScheduledRunWib,
+  };
+}
+
+/**
+ * Check and execute scheduled daily Telegram backup.
+ * Supports force execution for manual testing of automated pipeline.
+ */
+export async function checkDailyTelegramBackupSchedule(forceRun = false): Promise<{
+  ran: boolean;
+  success?: boolean;
+  message: string;
+}> {
+  if (isBackupInProgress) {
+    return { ran: false, message: 'Cadangan database Telegram sedang berlangsung' };
+  }
+
+  try {
+    const db = await getDatabase();
+    const settings = db.settings;
+
+    const botToken = (settings.telegramBotToken || process.env.TELEGRAM_BOT_TOKEN || '').trim();
+    const chatId = (settings.telegramChatId || process.env.TELEGRAM_CHAT_ID || '').trim();
+
+    if (!settings.telegramDailyBackupEnabled && !forceRun) {
+      return { ran: false, message: 'Backup harian otomatis Telegram dinonaktifkan' };
+    }
+
+    if (!botToken || !chatId) {
+      return { ran: false, message: 'Bot Token atau Chat ID Telegram belum dikonfigurasi' };
+    }
+
+    const wibNow = getWibDateTime();
+    const targetTime = (settings.telegramDailyBackupTime || '00:00').trim();
+    const [targetHStr, targetMStr] = targetTime.split(':');
+    const targetHour = parseInt(targetHStr || '0', 10);
+    const targetMinute = parseInt(targetMStr || '0', 10);
+
+    const currentMinutesOfDay = wibNow.hour * 60 + wibNow.minute;
+    const targetMinutesOfDay = targetHour * 60 + targetMinute;
+
+    // Check if automated backup has already succeeded for today's WIB date
+    const alreadyRanToday = settings.lastTelegramDailyBackupDateWib === wibNow.dateStr;
+
+    // Evaluate trigger condition:
+    // Either forced, or (has not yet run today AND current WIB time has reached target time)
+    const isDue = currentMinutesOfDay >= targetMinutesOfDay;
+    const shouldTrigger = forceRun || (!alreadyRanToday && isDue);
+
+    if (!shouldTrigger) {
+      return {
+        ran: false,
+        message: alreadyRanToday
+          ? `Backup hari ini (${wibNow.dateStr}) sudah berhasil terkirim`
+          : `Menunggu waktu jadwal (${targetTime} WIB, saat ini ${wibNow.timeStr} WIB)`,
+      };
+    }
+
+    // Cooldown check if retrying after failure
+    const nowMs = Date.now();
+    if (!forceRun && retryAttemptCount > 0 && nowMs - lastRetryAt < 120000) {
+      return { ran: false, message: 'Menunggu jeda percobaan ulang (retry cooldown 2 menit)' };
+    }
+
+    isBackupInProgress = true;
+    console.log(`⏰ [Telegram Scheduler] Menjalankan backup harian untuk tanggal WIB ${wibNow.dateStr} (Target: ${targetTime} WIB, Saat ini: ${wibNow.timeStr} WIB)...`);
+
+    const res = await dispatchTelegramBackup({
+      botToken,
+      chatId,
+      format: settings.telegramIncludeFormat || 'both',
+      triggerType: 'daily_automated',
+    });
+
+    if (res.success) {
+      retryAttemptCount = 0;
+      console.log(`✅ [Telegram Scheduler] Backup harian Telegram untuk ${wibNow.dateStr} BERHASIL terkirim!`);
+      return { ran: true, success: true, message: res.message };
+    } else {
+      retryAttemptCount += 1;
+      lastRetryAt = Date.now();
+      console.warn(`⚠️ [Telegram Scheduler] Backup harian gagal (percobaan #${retryAttemptCount}): ${res.message}`);
+      return { ran: true, success: false, message: res.message };
+    }
+  } catch (err: any) {
+    console.error('[Telegram Scheduler Error]', err.message);
+    return { ran: false, message: `Error scheduler: ${err.message}` };
+  } finally {
+    isBackupInProgress = false;
+  }
+}
 
 /**
  * Initialize daily background Telegram backup scheduler
- * Runs once every 60 seconds to inspect scheduled time.
+ * Runs every 30 seconds to inspect scheduled time with WIB accuracy.
  */
 export function initDailyTelegramBackupScheduler() {
   if (schedulerInterval) {
@@ -392,52 +630,18 @@ export function initDailyTelegramBackupScheduler() {
     schedulerInterval = null;
   }
 
-  console.log('⏰ Initializing Daily Telegram Backup Scheduler...');
+  console.log('⏰ Inisialisasi Penjadwal Backup Otomatis Telegram (Zona Waktu WIB / Asia/Jakarta)...');
 
-  const checkScheduledBackup = async () => {
-    try {
-      const db = await getDatabase();
-      const settings = db.settings;
+  // Initial check after 3 seconds on server startup
+  setTimeout(() => {
+    checkDailyTelegramBackupSchedule().catch((e) => console.error('[Telegram Scheduler Initial Check]', e));
+  }, 3000);
 
-      if (!settings.telegramDailyBackupEnabled) {
-        return;
-      }
+  // Periodic check every 30 seconds
+  schedulerInterval = setInterval(() => {
+    checkDailyTelegramBackupSchedule().catch((e) => console.error('[Telegram Scheduler Interval Check]', e));
+  }, 30000);
 
-      if (!settings.telegramBotToken || !settings.telegramChatId) {
-        return;
-      }
-
-      const now = new Date();
-      // Server / Local hours & minutes
-      const currentHour = String(now.getHours()).padStart(2, '0');
-      const currentMin = String(now.getMinutes()).padStart(2, '0');
-      const currentTime = `${currentHour}:${currentMin}`;
-
-      const targetTime = (settings.telegramDailyBackupTime || '00:00').trim();
-
-      // Check if already dispatched today
-      const todayDateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
-      const lastBackupDateStr = (settings.lastTelegramBackupAt || '').split('T')[0];
-
-      if (currentTime === targetTime && lastBackupDateStr !== todayDateStr) {
-        console.log(`🚀 [Telegram Scheduler] Triggering daily backup for ${todayDateStr} at ${currentTime}...`);
-        const res = await dispatchTelegramBackup({
-          triggerType: 'daily_automated',
-        });
-        if (res.success) {
-          console.log('✅ [Telegram Scheduler] Daily backup sent successfully!');
-        } else {
-          console.warn('⚠️ [Telegram Scheduler] Daily backup failed:', res.message);
-        }
-      }
-    } catch (err: any) {
-      console.error('[Telegram Scheduler Error]', err.message);
-    }
-  };
-
-  // Run initial check after 5 seconds, then every 60 seconds
-  setTimeout(checkScheduledBackup, 5000);
-  schedulerInterval = setInterval(checkScheduledBackup, 60000);
   if (schedulerInterval && typeof schedulerInterval.unref === 'function') {
     schedulerInterval.unref();
   }
