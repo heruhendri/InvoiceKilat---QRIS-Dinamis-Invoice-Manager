@@ -4500,6 +4500,9 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
     let commitMessage = 'Release v3.2.0: Dynamic QRIS & Mikhmon Hosting Suite';
     let commitAuthor = 'heruhendri';
     let commitDate = new Date().toISOString();
+    let htmlUrl = `https://github.com/${repo}/commit/${commitSha}`;
+    let authorAvatarUrl = '';
+    let authorLogin = '';
 
     try {
       const ghRes = await fetch(`https://api.github.com/repos/${repo}/commits/${branch}`, {
@@ -4511,6 +4514,9 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
         commitMessage = ghData.commit?.message?.split('\n')[0] || commitMessage;
         commitAuthor = ghData.commit?.author?.name || ghData.author?.login || commitAuthor;
         commitDate = ghData.commit?.author?.date || commitDate;
+        htmlUrl = ghData.html_url || `https://github.com/${repo}/commit/${ghData.sha || commitSha}`;
+        authorAvatarUrl = ghData.author?.avatar_url || '';
+        authorLogin = ghData.author?.login || '';
       } else if (repo === 'heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager' || repo === 'ciptamedia/invoice-kilat') {
         // Fallback for default official repo
         commitSha = 'b7e21a4';
@@ -4539,6 +4545,9 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
       commitMessage,
       commitAuthor,
       commitDate,
+      htmlUrl,
+      authorAvatarUrl,
+      authorLogin,
       downloadUrl: `https://github.com/${repo}/archive/refs/heads/${branch}.zip`,
       detectedGit,
     });

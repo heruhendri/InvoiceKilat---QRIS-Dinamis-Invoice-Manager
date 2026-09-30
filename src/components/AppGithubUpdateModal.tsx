@@ -19,9 +19,16 @@ import {
   Cpu,
   Lock,
   Layers,
-  Info
+  Info,
+  Globe,
+  Radio,
+  GitCommit,
+  Clock,
+  ArrowUpRight,
+  Download
 } from 'lucide-react';
 import { BusinessSettings } from '../types';
+import { formatDateTimeIndo } from '../utils/formatters';
 
 interface AppGithubUpdateModalProps {
   isOpen: boolean;
@@ -38,6 +45,12 @@ interface AppCommitInfo {
   commitAuthor: string;
   commitDate: string;
   downloadUrl: string;
+  htmlUrl?: string;
+  authorAvatarUrl?: string;
+  authorLogin?: string;
+  directLatencyMs?: number;
+  isUpToDate?: boolean;
+  checkedVia?: 'github_direct' | 'server_proxy';
 }
 
 const PRESET_APP_REPOS = [
@@ -153,18 +166,80 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
     setErrorMsg(null);
     setSuccessResult(null);
     setIsLoadingInfo(true);
+    const startTime = performance.now();
+
     try {
       const { repo, branch: b } = parseRepoAndBranch(urlToCheck);
-      const res = await fetch(
-        `/api/system/github-info?url=${encodeURIComponent(urlToCheck)}&repo=${encodeURIComponent(
-          repo
-        )}&branch=${encodeURIComponent(b)}`
-      );
-      const data = await res.json();
-      if (data && data.success) {
-        setCommitInfo(data);
-      } else {
-        setErrorMsg(data?.message || 'Gagal membaca repositori GitHub aplikasi.');
+      let directSuccess = false;
+
+      // 1. Pengecekan Langsung ke GitHub API (api.github.com)
+      try {
+        const ghDirectRes = await fetch(`https://api.github.com/repos/${repo}/commits/${b}`, {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+          },
+        });
+
+        if (ghDirectRes.ok) {
+          const ghData = await ghDirectRes.json();
+          const latencyMs = Math.round(performance.now() - startTime);
+          const fullSha = ghData.sha || '';
+          const shortSha = fullSha.slice(0, 7) || 'latest';
+          const msg = ghData.commit?.message?.split('\n')[0] || 'Pembaruan rilis terbaru';
+          const authorName = ghData.commit?.author?.name || ghData.author?.login || 'heruhendri';
+          const authorAvatar = ghData.author?.avatar_url || '';
+          const commitDateStr = ghData.commit?.author?.date || new Date().toISOString();
+          const htmlUrl = ghData.html_url || `https://github.com/${repo}/commit/${fullSha}`;
+          const isUpToDate = currentAppVersion.toLowerCase().includes(shortSha.toLowerCase());
+
+          setCommitInfo({
+            repo,
+            branch: b,
+            commitSha: shortSha,
+            commitMessage: msg,
+            commitAuthor: authorName,
+            commitDate: commitDateStr,
+            downloadUrl: `https://github.com/${repo}/archive/refs/heads/${b}.zip`,
+            htmlUrl,
+            authorAvatarUrl: authorAvatar,
+            authorLogin: ghData.author?.login,
+            directLatencyMs: latencyMs,
+            isUpToDate,
+            checkedVia: 'github_direct',
+          });
+          directSuccess = true;
+        }
+      } catch (directErr) {
+        console.warn('Pengecekan langsung ke GitHub dialihkan ke gateway server:', directErr);
+      }
+
+      // 2. Fallback via server gateway jika pengecekan langsung gagal / terkena limit
+      if (!directSuccess) {
+        const res = await fetch(
+          `/api/system/github-info?url=${encodeURIComponent(urlToCheck)}&repo=${encodeURIComponent(
+            repo
+          )}&branch=${encodeURIComponent(b)}`
+        );
+        const data = await res.json();
+        const latencyMs = Math.round(performance.now() - startTime);
+
+        if (data && data.success) {
+          const shortSha = (data.commitSha || '').slice(0, 7);
+          const isUpToDate = currentAppVersion.toLowerCase().includes(shortSha.toLowerCase());
+
+          setCommitInfo({
+            ...data,
+            commitSha: shortSha,
+            htmlUrl: data.htmlUrl || `https://github.com/${repo}/commit/${data.commitSha}`,
+            authorAvatarUrl: data.authorAvatarUrl || '',
+            authorLogin: data.authorLogin || '',
+            directLatencyMs: latencyMs,
+            isUpToDate,
+            checkedVia: 'server_proxy',
+          });
+        } else {
+          setErrorMsg(data?.message || 'Gagal membaca repositori GitHub aplikasi.');
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Koneksi ke GitHub API gagal');
@@ -684,45 +759,177 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
             </div>
           </div>
 
-          {/* Commit Preview Information Card */}
-          {commitInfo && (
-            <div className="p-4 rounded-2xl bg-blue-950/30 border border-blue-500/30 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-300 flex items-center gap-1.5 font-mono">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Repositori Terverifikasi: {commitInfo.repo} ({commitInfo.branch})</span>
-                </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-200">
-                  Commit {commitInfo.commitSha}
-                </span>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800/80 space-y-1 text-xs">
-                <p className="text-slate-200 font-semibold truncate">
-                  "{commitInfo.commitMessage}"
-                </p>
-                <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 font-mono pt-1">
-                  <span>Author: <strong className="text-slate-300">{commitInfo.commitAuthor}</strong></span>
-                  <span>Dirilis: {new Date(commitInfo.commitDate).toLocaleString('id-ID')}</span>
+          {/* 4. Panel Pengecekan Langsung ke GitHub API (Direct api.github.com Integration) */}
+          <div id="github-direct-check-hud" className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/60 border border-indigo-500/30 space-y-3.5 shadow-xl relative overflow-hidden">
+            {/* Header Status Koneksi Langsung GitHub API */}
+            <div className="flex items-center justify-between flex-wrap gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 relative">
+                  <Github className="w-4 h-4 text-white" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-950 animate-ping" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-950" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-black text-white uppercase tracking-wider font-mono">
+                      Pengecekan Langsung ke GitHub API
+                    </span>
+                    {commitInfo?.directLatencyMs !== undefined && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold flex items-center gap-1">
+                        <Radio className="w-3 h-3 text-emerald-400" />
+                        <span>{commitInfo.directLatencyMs}ms latency</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5 font-mono">
+                    <Globe className="w-3 h-3 text-blue-400 shrink-0" />
+                    <span className="truncate">
+                      Endpoint: <strong className="text-slate-300">api.github.com/repos/{parseRepoAndBranch(customUrl).repo}</strong>
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-cyan-300 font-bold uppercase shrink-0">
+                      {commitInfo?.checkedVia === 'github_direct' ? 'Direct API' : 'Live Gateway'}
+                    </span>
+                  </p>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-slate-400 pt-0.5">
-                <span className="text-slate-400">
-                  Status: Siap di-update ke versi terbaru
-                </span>
-                <a
-                  href={`https://github.com/${commitInfo.repo}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300 flex items-center gap-1 font-bold"
-                >
-                  <span>Buka di GitHub</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
+              <button
+                type="button"
+                onClick={() => handleCheckCommit(customUrl, branch)}
+                disabled={isLoadingInfo || !customUrl.trim()}
+                className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1.5 border border-indigo-400/30 shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+                title="Periksa commit dan rilis langsung ke server GitHub"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInfo ? 'animate-spin text-amber-300' : ''}`} />
+                <span>{isLoadingInfo ? 'Memeriksa...' : 'Cek Langsung'}</span>
+              </button>
             </div>
-          )}
+
+            {/* Loading Indicator */}
+            {isLoadingInfo && !commitInfo && (
+              <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 flex items-center gap-3 animate-pulse">
+                <RefreshCw className="w-5 h-5 animate-spin text-blue-400 shrink-0" />
+                <div>
+                  <p className="font-bold text-white">Menghubungi api.github.com secara langsung...</p>
+                  <p className="text-[11px] text-slate-400">Memverifikasi rilis commit terbaru pada branch <strong>{branch}</strong> secara real-time.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Commit & Differential Information Panel */}
+            {commitInfo && (
+              <div className="space-y-2.5">
+                {/* Banner Status Komparasi Versi */}
+                <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                  commitInfo.isUpToDate
+                    ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
+                    : 'bg-blue-950/50 border-blue-500/60 text-blue-200 shadow-sm'
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className={`p-1.5 rounded-lg ${commitInfo.isUpToDate ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-300'}`}>
+                      {commitInfo.isUpToDate ? <CheckCircle2 className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <span className="font-extrabold block">
+                        {commitInfo.isUpToDate
+                          ? 'Aplikasi Anda Sudah Menggunakan Versi Terbaru'
+                          : 'Pembaruan Kode Baru Terverifikasi di GitHub!'}
+                      </span>
+                      <span className="text-[11px] opacity-85 font-mono">
+                        {commitInfo.isUpToDate
+                          ? `Versi aktif (${currentAppVersion}) sudah sinkron dengan commit #${commitInfo.commitSha}`
+                          : `Commit #${commitInfo.commitSha} terverifikasi siap dipasang & di-rebuild`}
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-lg font-extrabold shrink-0 border ${
+                    commitInfo.isUpToDate
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      : 'bg-blue-500/30 text-blue-200 border-blue-400/40 animate-pulse'
+                  }`}>
+                    {commitInfo.isUpToDate ? '✓ Mutakhir' : '🚀 Update Siap'}
+                  </span>
+                </div>
+
+                {/* Box Detail Commit */}
+                <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800 space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-white font-semibold leading-relaxed">
+                      "{commitInfo.commitMessage}"
+                    </p>
+                    <a
+                      href={commitInfo.htmlUrl || `https://github.com/${commitInfo.repo}/commit/${commitInfo.commitSha}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 font-bold shrink-0 flex items-center gap-1 transition"
+                      title="Buka commit ini di GitHub.com"
+                    >
+                      <GitCommit className="w-3 h-3 text-cyan-400" />
+                      <span>#{commitInfo.commitSha}</span>
+                      <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                    </a>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-800/80 text-[11px] text-slate-400 font-mono">
+                    <div className="flex items-center gap-2">
+                      {commitInfo.authorAvatarUrl ? (
+                        <img
+                          src={commitInfo.authorAvatarUrl}
+                          alt={commitInfo.commitAuthor}
+                          className="w-4 h-4 rounded-full border border-slate-700 object-cover"
+                        />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-indigo-600 text-[9px] font-bold text-white flex items-center justify-center">
+                          {commitInfo.commitAuthor.slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <span>Author: <strong className="text-slate-200">{commitInfo.commitAuthor}</strong></span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      <Clock className="w-3 h-3 text-slate-500" />
+                      <span>{formatDateTimeIndo(commitInfo.commitDate)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tautan Aksi Langsung ke GitHub */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-[11px] text-slate-400">
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={commitInfo.htmlUrl || `https://github.com/${commitInfo.repo}/commit/${commitInfo.commitSha}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 flex items-center gap-1 font-bold transition"
+                    >
+                      <span>Lihat Commit di GitHub</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <span className="text-slate-700">•</span>
+                    <a
+                      href={`https://github.com/${commitInfo.repo}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-slate-400 hover:text-white flex items-center gap-1 font-medium transition"
+                    >
+                      <span>Repositori Utama</span>
+                      <ArrowUpRight className="w-3 h-3" />
+                    </a>
+                  </div>
+
+                  <a
+                    href={commitInfo.downloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-400 hover:text-emerald-300 flex items-center gap-1 font-mono transition"
+                  >
+                    <Download className="w-3 h-3 text-emerald-400" />
+                    <span>Unduh ZIP ({commitInfo.branch})</span>
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Pengaturan Penanganan Data & Rebuild Otomatis */}
           <div className="space-y-3 pt-1">
