@@ -1,4 +1,11 @@
 import { Router, Request, Response } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { getDatabase, saveDatabase, DEFAULT_DANA_STATIC_QRIS, DEFAULT_ADMIN_USERS, DEFAULT_SETTINGS, DEFAULT_RECURRING_ADDONS, createDatabaseBackupSnapshot, DEFAULT_MIKHMON_PLANS, DEFAULT_MIKHMON_INSTANCES, DEFAULT_MIKHMON_SERVER_CONFIG } from './storage';
 import { convertToDynamicQris, generateQrDataUrl, validateQris, parseQris } from './qris';
 import { testTelegramConnection, dispatchTelegramBackup, getTelegramSchedulerStatus, checkDailyTelegramBackupSchedule } from './telegram';
@@ -4273,14 +4280,223 @@ apiRouter.post('/mikhmon/packages/update-github', async (req: Request, res: Resp
   }
 });
 
+/**
+ * Detect local Git repository installation from .git directory or git CLI
+ */
+function detectLocalGitInfo(): {
+  hasGit: boolean;
+  repoUrl: string | null;
+  branch: string | null;
+  commitSha: string | null;
+  source: 'git_config' | 'git_cli' | 'env' | 'none';
+  gitPath?: string;
+} {
+  const candidateDirs: string[] = [];
+
+  // Crawl up to 5 levels up from process.cwd()
+  let currCwd = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    candidateDirs.push(path.join(currCwd, '.git'));
+    const parent = path.dirname(currCwd);
+    if (parent === currCwd) break;
+    currCwd = parent;
+  }
+
+  // Crawl up to 5 levels up from __dirname
+  let currDir = __dirname;
+  for (let i = 0; i < 5; i++) {
+    candidateDirs.push(path.join(currDir, '.git'));
+    const parent = path.dirname(currDir);
+    if (parent === currDir) break;
+    currDir = parent;
+  }
+
+  // Known deployment directories for VPS/Linux installs
+  candidateDirs.push(
+    '/var/www/invoice-kilat/.git',
+    '/opt/invoice-kilat/.git',
+    '/root/invoice-kilat/.git',
+    '/home/invoice-kilat/.git'
+  );
+
+  // 1. Check .git directory directly via filesystem
+  for (const gitPath of candidateDirs) {
+    try {
+      if (fs.existsSync(gitPath)) {
+        const stat = fs.statSync(gitPath);
+        let actualGitDir = gitPath;
+
+        // Support git worktree / submodule pointers (.git file with gitdir: ...)
+        if (stat.isFile()) {
+          const fileContent = fs.readFileSync(gitPath, 'utf8').trim();
+          const match = fileContent.match(/gitdir:\s*([^\r\n]+)/i);
+          if (match && match[1]) {
+            actualGitDir = path.resolve(path.dirname(gitPath), match[1].trim());
+          }
+        }
+
+        const configPath = path.join(actualGitDir, 'config');
+        if (fs.existsSync(configPath)) {
+          const configContent = fs.readFileSync(configPath, 'utf8');
+
+          // Match [remote "origin"] url or any remote url
+          const originMatch = configContent.match(/\[remote\s+["']?origin["']?\][^\[]*?url\s*=\s*([^\r\n]+)/i);
+          const anyRemoteMatch = configContent.match(/url\s*=\s*([^\r\n]+)/i);
+          const urlMatch = originMatch || anyRemoteMatch;
+
+          let remoteUrl: string | null = null;
+          if (urlMatch && urlMatch[1]) {
+            let rawUrl = urlMatch[1].trim();
+            // Normalize: strip credentials https://token@github.com/... -> https://github.com/...
+            rawUrl = rawUrl.replace(/^ssh:\/\/git@github\.com\//i, 'https://github.com/');
+            rawUrl = rawUrl.replace(/^git@github\.com:/i, 'https://github.com/');
+            rawUrl = rawUrl.replace(/^(?:https?:\/\/)?(?:[^@\/\n]+@)?github\.com[:\/]/i, 'https://github.com/');
+            rawUrl = rawUrl.replace(/\.git$/i, '');
+            remoteUrl = rawUrl;
+          }
+
+          // Read current branch from .git/HEAD
+          let branch = 'main';
+          let localCommitSha: string | null = null;
+          const headPath = path.join(actualGitDir, 'HEAD');
+          if (fs.existsSync(headPath)) {
+            const headContent = fs.readFileSync(headPath, 'utf8').trim();
+            const branchMatch = headContent.match(/ref:\s*refs\/heads\/([^\r\n]+)/i);
+            if (branchMatch && branchMatch[1]) {
+              branch = branchMatch[1].trim();
+              const branchRefPath = path.join(actualGitDir, 'refs', 'heads', branch);
+              if (fs.existsSync(branchRefPath)) {
+                try {
+                  localCommitSha = fs.readFileSync(branchRefPath, 'utf8').trim().slice(0, 7);
+                } catch {}
+              }
+            } else if (/^[0-9a-f]{40}$/i.test(headContent)) {
+              localCommitSha = headContent.slice(0, 7);
+            }
+          }
+
+          if (remoteUrl) {
+            return {
+              hasGit: true,
+              repoUrl: remoteUrl,
+              branch,
+              commitSha: localCommitSha,
+              source: 'git_config',
+              gitPath: actualGitDir,
+            };
+          }
+        }
+      }
+    } catch (e) {
+      // Continue search
+    }
+  }
+
+  // 2. Try git CLI command if git command is installed on server
+  try {
+    const rawGitUrl = execSync('git config --get remote.origin.url', {
+      timeout: 2500,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    }).trim();
+
+    if (rawGitUrl) {
+      let cleanUrl = rawGitUrl;
+      cleanUrl = cleanUrl.replace(/^ssh:\/\/git@github\.com\//i, 'https://github.com/');
+      cleanUrl = cleanUrl.replace(/^git@github\.com:/i, 'https://github.com/');
+      cleanUrl = cleanUrl.replace(/^(?:https?:\/\/)?(?:[^@\/\n]+@)?github\.com[:\/]/i, 'https://github.com/');
+      cleanUrl = cleanUrl.replace(/\.git$/i, '');
+
+      let currentBranch = 'main';
+      try {
+        currentBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+          timeout: 2000,
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'ignore'],
+        }).trim() || 'main';
+      } catch {}
+
+      let currentCommitSha = null;
+      try {
+        currentCommitSha = execSync('git rev-parse --short HEAD', {
+          timeout: 2000,
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'ignore'],
+        }).trim() || null;
+      } catch {}
+
+      return {
+        hasGit: true,
+        repoUrl: cleanUrl,
+        branch: currentBranch,
+        commitSha: currentCommitSha,
+        source: 'git_cli',
+      };
+    }
+  } catch {}
+
+  // 3. Fallback to process.env if injected (e.g. Docker or CI/CD)
+  if (process.env.GIT_REPO_URL || process.env.APP_GITHUB_REPO) {
+    const envUrl = (process.env.GIT_REPO_URL || process.env.APP_GITHUB_REPO || '').trim();
+    if (envUrl) {
+      let cleanUrl = envUrl.replace(/^(?:https?:\/\/)?(?:[^@\/\n]+@)?github\.com[:\/]/i, 'https://github.com/');
+      cleanUrl = cleanUrl.replace(/^git@github\.com:/i, 'https://github.com/');
+      cleanUrl = cleanUrl.replace(/\.git$/i, '');
+      return {
+        hasGit: true,
+        repoUrl: cleanUrl,
+        branch: process.env.GIT_BRANCH || process.env.APP_GITHUB_BRANCH || 'main',
+        commitSha: null,
+        source: 'env',
+      };
+    }
+  }
+
+  return {
+    hasGit: false,
+    repoUrl: null,
+    branch: null,
+    commitSha: null,
+    source: 'none',
+  };
+}
+
+// GET /api/system/git-detected - Detect local repository from .git directory
+apiRouter.get('/system/git-detected', async (req: Request, res: Response) => {
+  try {
+    const gitInfo = detectLocalGitInfo();
+    const db = await getDatabase();
+    return res.json({
+      success: true,
+      hasGit: gitInfo.hasGit,
+      repoUrl: gitInfo.repoUrl,
+      branch: gitInfo.branch,
+      commitSha: gitInfo.commitSha,
+      source: gitInfo.source,
+      savedRepoUrl: db.settings?.appGithubRepo || null,
+      savedBranch: db.settings?.appGithubBranch || null,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: 'Gagal mendeteksi folder git: ' + err.message });
+  }
+});
+
 // GET /api/system/github-info - Check application update from GitHub
 apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
   try {
-    const rawInput = (req.query.url as string) || (req.query.repo as string) || 'ciptamedia/invoice-kilat';
-    const rawBranch = (req.query.branch as string) || 'main';
+    const detectedGit = detectLocalGitInfo();
+    const defaultFallback = detectedGit.hasGit && detectedGit.repoUrl 
+      ? detectedGit.repoUrl 
+      : 'ciptamedia/invoice-kilat';
+    const defaultBranch = detectedGit.hasGit && detectedGit.branch
+      ? detectedGit.branch
+      : 'main';
+
+    const rawInput = (req.query.url as string) || (req.query.repo as string) || defaultFallback;
+    const rawBranch = (req.query.branch as string) || defaultBranch;
     const { repo, branch } = parseGithubUrlHelper(rawInput, rawBranch);
 
-    let commitSha = 'b7e21a4';
+    let commitSha = detectedGit.commitSha || 'b7e21a4';
     let commitMessage = 'Release v3.2.0: Dynamic QRIS & Mikhmon Hosting Suite';
     let commitAuthor = 'ciptamedia';
     let commitDate = new Date().toISOString();
@@ -4308,6 +4524,7 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
           message: errorData.message || `Repositori GitHub aplikasi "${repo}" (branch ${branch}) tidak ditemukan.`,
           repo,
           branch,
+          detectedGit,
         });
       }
     } catch (e: any) {
@@ -4323,6 +4540,7 @@ apiRouter.get('/system/github-info', async (req: Request, res: Response) => {
       commitAuthor,
       commitDate,
       downloadUrl: `https://github.com/${repo}/archive/refs/heads/${branch}.zip`,
+      detectedGit,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: 'Gagal mengecek update aplikasi: ' + err.message });

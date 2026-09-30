@@ -190,7 +190,7 @@ invoice-kilat/
 
 ```bash
 # 1. Clone repositori ini
-git clone https://github.com/heruhendri/InvoiceKilat---QRIS-Dinamis-Invoice-Manager.git
+git clone https://github.com/USERNAME/invoice-kilat.git
 cd invoice-kilat
 
 # 2. Pasang dependensi

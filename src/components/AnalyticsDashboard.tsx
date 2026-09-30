@@ -1301,16 +1301,6 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
-              id="btn-simulate-qris-dash"
-              onClick={handleSimulateQrisPayment}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-4 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-emerald-500/25 transition active:scale-95 border border-emerald-400/30 cursor-pointer"
-              title="Simulasikan pembayaran QRIS masuk secara instan"
-            >
-              <Zap className="w-4 h-4 text-emerald-200 fill-emerald-200" />
-              <span>Simulasi QRIS Masuk</span>
-            </button>
-
-            <button
               id="run-reminders-check-btn"
               onClick={onTriggerCheckReminders}
               disabled={isCheckingReminders}

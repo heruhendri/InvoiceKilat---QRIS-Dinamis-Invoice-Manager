@@ -12,7 +12,8 @@ import {
   Check,
   ArrowRight,
   ShieldCheck,
-  CheckCheck
+  CheckCheck,
+  FolderGit2
 } from 'lucide-react';
 import { BusinessSettings } from '../types';
 
@@ -86,6 +87,15 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
     message: string;
   } | null>(null);
 
+  // Local .git folder detection state
+  const [detectedGit, setDetectedGit] = useState<{
+    hasGit: boolean;
+    repoUrl: string | null;
+    branch: string | null;
+    source?: string;
+  } | null>(null);
+  const [isDetectingGit, setIsDetectingGit] = useState<boolean>(false);
+
   // Helper to parse repo string from custom URL
   const parseRepoAndBranch = (inputUrl: string) => {
     let clean = inputUrl.trim();
@@ -138,32 +148,98 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
     }
   };
 
+  // Detect git repository from .git folder on server
+  const detectGitInstallation = async () => {
+    setIsDetectingGit(true);
+    try {
+      const res = await fetch('/api/system/git-detected');
+      const data = await res.json();
+      if (data && data.success && data.hasGit && data.repoUrl) {
+        const info = {
+          hasGit: true,
+          repoUrl: data.repoUrl as string,
+          branch: (data.branch as string) || 'main',
+          source: data.source as string,
+        };
+        setDetectedGit(info);
+        return info;
+      } else {
+        setDetectedGit({ hasGit: false, repoUrl: null, branch: null, source: 'none' });
+      }
+    } catch (e) {
+      console.warn('Git detection warning:', e);
+    } finally {
+      setIsDetectingGit(false);
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (isOpen) {
-      const savedUrl = settings?.appGithubRepo || 'https://github.com/ciptamedia/invoice-kilat';
-      const savedBranch = settings?.appGithubBranch || 'main';
-      setCustomUrl(savedUrl);
-      setBranch(savedBranch);
       setSuccessResult(null);
       setErrorMsg(null);
 
-      const matchedPreset = PRESET_APP_REPOS.find((p) => p.url === savedUrl);
-      if (matchedPreset) {
-        setSelectedPreset(matchedPreset.id);
-      } else {
-        setSelectedPreset('custom');
-      }
+      detectGitInstallation().then((gitInfo) => {
+        // Otomatis terisi jika instalasi menggunakan GitHub (cari di folder .git)
+        if (gitInfo && gitInfo.hasGit && gitInfo.repoUrl) {
+          setCustomUrl(gitInfo.repoUrl);
+          setBranch(gitInfo.branch || 'main');
+          setSelectedPreset('git-detected');
+          handleCheckCommit(gitInfo.repoUrl, gitInfo.branch || 'main');
+        } else {
+          const activeUrl = settings?.appGithubRepo || 'https://github.com/ciptamedia/invoice-kilat';
+          const activeBranch = settings?.appGithubBranch || 'main';
+          setCustomUrl(activeUrl);
+          setBranch(activeBranch);
 
-      handleCheckCommit(savedUrl, savedBranch);
+          const matchedPreset = PRESET_APP_REPOS.find((p) => p.url === activeUrl);
+          if (matchedPreset) {
+            setSelectedPreset(matchedPreset.id);
+          } else {
+            setSelectedPreset('custom');
+          }
+          handleCheckCommit(activeUrl, activeBranch);
+        }
+      });
     }
   }, [isOpen]);
+
+  const availablePresets = [
+    ...(detectedGit?.hasGit && detectedGit.repoUrl
+      ? [
+          {
+            id: 'git-detected',
+            title: 'Lokal Git Terdeteksi (.git)',
+            repo: parseRepoAndBranch(detectedGit.repoUrl).repo,
+            branch: detectedGit.branch || 'main',
+            url: detectedGit.repoUrl,
+            desc: `Otomatis terbaca dari folder .git konfigurasi instalasi VPS / server Anda (${detectedGit.branch || 'main'})`,
+            badge: 'Otomatis .git',
+          },
+        ]
+      : []),
+    ...PRESET_APP_REPOS,
+  ];
 
   const handleSelectPreset = (presetId: string) => {
     setSelectedPreset(presetId);
     setErrorMsg(null);
     setSuccessResult(null);
+
+    if (presetId === 'git-detected' && detectedGit?.repoUrl) {
+      setCustomUrl(detectedGit.repoUrl);
+      setBranch(detectedGit.branch || 'main');
+      handleCheckCommit(detectedGit.repoUrl, detectedGit.branch || 'main');
+      return;
+    }
+
+    if (presetId === 'custom') {
+      // In custom mode, keep whatever URL or let user type freely
+      return;
+    }
+
     const preset = PRESET_APP_REPOS.find((p) => p.id === presetId);
-    if (preset && preset.id !== 'custom') {
+    if (preset && preset.url) {
       setCustomUrl(preset.url);
       setBranch(preset.branch);
       handleCheckCommit(preset.url, preset.branch);
@@ -172,7 +248,16 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
 
   const handleUrlChange = (newUrl: string) => {
     setCustomUrl(newUrl);
-    setSelectedPreset('custom');
+    if (detectedGit?.hasGit && newUrl === detectedGit.repoUrl) {
+      setSelectedPreset('git-detected');
+    } else {
+      const matched = PRESET_APP_REPOS.find((p) => p.url === newUrl);
+      if (matched) {
+        setSelectedPreset(matched.id);
+      } else {
+        setSelectedPreset('custom');
+      }
+    }
     const { branch: extractedBranch } = parseRepoAndBranch(newUrl);
     if (extractedBranch && extractedBranch !== branch) {
       setBranch(extractedBranch);
@@ -285,8 +370,8 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
             <label className="block text-xs font-bold text-slate-300 mb-2">
               Pilih Sumber Repositori Aplikasi:
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {PRESET_APP_REPOS.map((preset) => {
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+              {availablePresets.map((preset) => {
                 const isSelected = selectedPreset === preset.id;
                 return (
                   <button
@@ -322,26 +407,184 @@ export const AppGithubUpdateModal: React.FC<AppGithubUpdateModalProps> = ({
           {/* Custom Link Input Field */}
           <div className="space-y-3.5 p-4 rounded-2xl bg-slate-950 border border-slate-800">
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1.5">
                 <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                   <Link className="w-3.5 h-3.5 text-blue-400" />
                   <span>Tautan Repositori GitHub Aplikasi</span>
                   <span className="text-rose-400">*</span>
                 </label>
-                <span className="text-[10px] text-slate-500 font-mono">
-                  Bisa paste URL lengkap atau owner/repo
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {detectedGit?.hasGit && detectedGit.repoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomUrl(detectedGit.repoUrl!);
+                        setBranch(detectedGit.branch || 'main');
+                        setSelectedPreset('git-detected');
+                        handleCheckCommit(detectedGit.repoUrl!, detectedGit.branch || 'main');
+                      }}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border flex items-center gap-1 transition ${
+                        customUrl === detectedGit.repoUrl
+                          ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 shadow-sm'
+                          : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300'
+                      }`}
+                      title="Isi otomatis dengan tautan dari folder .git"
+                    >
+                      <FolderGit2 className="w-3 h-3 text-emerald-400" />
+                      <span>{customUrl === detectedGit.repoUrl ? 'Tautan .git Terisi' : 'Gunakan URL .git'}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPreset('custom');
+                    }}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border flex items-center gap-1 transition ${
+                      selectedPreset === 'custom'
+                        ? 'bg-purple-950/80 border-purple-500/50 text-purple-300 shadow-sm'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-purple-300 hover:border-purple-500/40'
+                    }`}
+                    title="Beralih ke mode custom link repositori atau fork"
+                  >
+                    <Sparkles className="w-3 h-3 text-purple-400" />
+                    <span>Mode Custom Link</span>
+                  </button>
+                  <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                    URL lengkap atau owner/repo
+                  </span>
+                </div>
               </div>
               <div className="relative">
-                <Github className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                {detectedGit?.hasGit && detectedGit.repoUrl && customUrl === detectedGit.repoUrl ? (
+                  <FolderGit2 className="w-4 h-4 text-emerald-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                ) : selectedPreset === 'custom' ? (
+                  <Link className="w-4 h-4 text-purple-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                ) : (
+                  <Github className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                )}
                 <input
                   type="text"
                   value={customUrl}
                   onChange={(e) => handleUrlChange(e.target.value)}
-                  placeholder="https://github.com/ciptamedia/invoice-kilat"
+                  placeholder={
+                    selectedPreset === 'custom'
+                      ? 'https://github.com/username/fork-repo atau owner/repo'
+                      : 'https://github.com/ciptamedia/invoice-kilat'
+                  }
                   required
-                  className="w-full pl-10 pr-3 py-2.5 text-xs font-mono rounded-xl border border-slate-700 bg-slate-900 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                  className={`w-full pl-10 pr-28 py-2.5 text-xs font-mono rounded-xl border transition-all duration-150 ${
+                    detectedGit?.hasGit && detectedGit.repoUrl && customUrl === detectedGit.repoUrl
+                      ? 'border-emerald-500/60 bg-slate-900/90 text-emerald-200 placeholder-slate-600 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/25'
+                      : selectedPreset === 'custom'
+                        ? 'border-purple-500/60 bg-slate-900/90 text-purple-100 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/25'
+                        : 'border-slate-700 bg-slate-900 text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25'
+                  }`}
                 />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  {customUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomUrl('');
+                        setSelectedPreset('custom');
+                      }}
+                      className="px-1.5 py-0.5 text-[10px] font-bold text-slate-400 hover:text-rose-400 rounded bg-slate-800/80 hover:bg-slate-800 transition"
+                      title="Kosongkan input untuk ketik custom link baru"
+                    >
+                      Hapus
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const clipText = await navigator.clipboard.readText();
+                        if (clipText) handleUrlChange(clipText);
+                      } catch {}
+                    }}
+                    className="px-1.5 py-0.5 text-[10px] font-bold text-blue-400 hover:text-blue-300 rounded bg-blue-950/80 hover:bg-blue-900/80 border border-blue-800/50 transition"
+                    title="Tempel tautan dari clipboard"
+                  >
+                    Tempel
+                  </button>
+                </div>
+              </div>
+
+              {/* Status terdeteksi dari folder .git atau mode custom link */}
+              <div className="mt-2.5">
+                {detectedGit?.hasGit && detectedGit.repoUrl && customUrl === detectedGit.repoUrl ? (
+                  <div className="flex items-center justify-between text-[11px] px-3 py-2 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-emerald-300">
+                    <div className="flex items-center gap-2 truncate">
+                      <FolderGit2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="truncate">
+                        Otomatis terisi dari folder <strong>.git</strong> lokal: <span className="font-mono text-emerald-200 font-bold">{detectedGit.repoUrl}</span> (branch: {detectedGit.branch || 'main'})
+                      </span>
+                    </div>
+                    <span className="ml-2 text-[9px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 font-mono shrink-0">
+                      Otomatis .git Aktif
+                    </span>
+                  </div>
+                ) : selectedPreset === 'custom' ? (
+                  <div className="flex items-center justify-between text-[11px] px-3 py-2 rounded-xl bg-purple-950/40 border border-purple-800/60 text-purple-300">
+                    <div className="flex items-center gap-2 truncate">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <span className="truncate">
+                        Mode <strong>Custom Link</strong> aktif: Masukkan repositori GitHub publik atau fork Anda sendiri.
+                      </span>
+                    </div>
+                    {detectedGit?.hasGit && detectedGit.repoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomUrl(detectedGit.repoUrl!);
+                          setBranch(detectedGit.branch || 'main');
+                          setSelectedPreset('git-detected');
+                          handleCheckCommit(detectedGit.repoUrl!, detectedGit.branch || 'main');
+                        }}
+                        className="ml-2 text-[10px] font-bold text-emerald-300 hover:text-white underline shrink-0 flex items-center gap-1"
+                      >
+                        <FolderGit2 className="w-3 h-3 text-emerald-400" />
+                        <span>Reset ke .git</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-[11px] px-3 py-2 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-400">
+                    <div className="flex items-center gap-2 truncate">
+                      <FolderGit2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span className="truncate">
+                        {detectedGit?.hasGit && detectedGit.repoUrl
+                          ? `Tersedia folder .git: ${detectedGit.repoUrl} (${detectedGit.branch})`
+                          : 'Bisa custom link repositori GitHub / fork Anda sendiri, atau scan folder .git lokal.'}
+                      </span>
+                    </div>
+                    {detectedGit?.hasGit && detectedGit.repoUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomUrl(detectedGit.repoUrl!);
+                          setBranch(detectedGit.branch || 'main');
+                          setSelectedPreset('git-detected');
+                          handleCheckCommit(detectedGit.repoUrl!, detectedGit.branch || 'main');
+                        }}
+                        className="ml-2 text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 shrink-0"
+                      >
+                        <FolderGit2 className="w-3 h-3" />
+                        <span>Gunakan .git</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={detectGitInstallation}
+                        disabled={isDetectingGit}
+                        className="ml-2 text-[10px] font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 shrink-0"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isDetectingGit ? 'animate-spin' : ''}`} />
+                        <span>Scan .git</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

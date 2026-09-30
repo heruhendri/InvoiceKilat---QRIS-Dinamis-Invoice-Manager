@@ -53,7 +53,7 @@
     "googleSheetId": "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms",
     "googleSheetName": "Master_Invoice_DB",
     "googleSheetWebhookUrl": "",
-    "lastSpreadsheetSync": "2026-09-30T13:02:28.306Z",
+    "lastSpreadsheetSync": "2026-09-30T13:03:01.126Z",
     "autoBackupToSheets": true,
     "whatsappNotificationEnabled": true,
     "whatsappTemplate": "Halo *{{customer_name}}*, terima kasih! Pembayaran invoice *{{invoice_number}}* sebesar *Rp {{amount}}* telah BERHASIL kami terima dan diverifikasi oleh sistem. Status invoice saat ini: *LUNAS*. Detail invoice: {{invoice_url}}",
@@ -101,107 +101,17 @@
           "ratePerUser": 5000,
           "isolirProfileName": "isolir",
           "connectionStatus": "connected",
-          "lastSyncedAt": "2026-09-30T12:46:40.694Z",
+          "lastSyncedAt": "2026-09-30T13:18:37.496Z",
           "totalPppoeSecrets": 52,
           "totalSecretsNonIsolir": 47,
           "totalSecretsIsolir": 5,
-          "activePppoeCount": 44,
-          "nonIsolirCount": 43,
+          "activePppoeCount": 45,
+          "nonIsolirCount": 44,
           "isolirCount": 1,
           "hotspotActiveCount": 0,
           "hotspotUsersCount": 1,
           "monthlyAverageNonIsolir": 44,
           "samples": [
-            {
-              "timestamp": "2026-09-26T14:16:54.811Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T14:17:04.321Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T14:42:16.857Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T14:42:20.697Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T16:46:57.357Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T16:46:58.671Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:24:50.026Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:25:21.238Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:25:22.758Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:25:51.081Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:25:52.844Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:34:49.565Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-30T12:39:53.907Z",
-              "activeCount": 45,
-              "nonIsolirCount": 44,
-              "isolirCount": 1
-            },
-            {
-              "timestamp": "2026-09-30T12:40:00.587Z",
-              "activeCount": 45,
-              "nonIsolirCount": 44,
-              "isolirCount": 1
-            },
-            {
-              "timestamp": "2026-09-30T12:42:13.062Z",
-              "activeCount": 45,
-              "nonIsolirCount": 44,
-              "isolirCount": 1
-            },
             {
               "timestamp": "2026-09-30T12:42:18.795Z",
               "activeCount": 45,
@@ -243,15 +153,153 @@
               "activeCount": 44,
               "nonIsolirCount": 43,
               "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T12:51:40.516Z",
+              "activeCount": 44,
+              "nonIsolirCount": 43,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:04:27.401Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:04:32.372Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:05:48.255Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:05:53.625Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:07:12.163Z",
+              "activeCount": 44,
+              "nonIsolirCount": 43,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:07:16.297Z",
+              "activeCount": 44,
+              "nonIsolirCount": 43,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:08:33.867Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:08:38.319Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:09:57.438Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:10:01.097Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:11:18.443Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:11:23.564Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:12:40.616Z",
+              "activeCount": 44,
+              "nonIsolirCount": 43,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:12:44.847Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:14:19.103Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:14:24.045Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:15:41.969Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:15:45.539Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:17:03.493Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:17:10.131Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:18:31.328Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:18:37.496Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
             }
           ],
           "preferredBillingMethod": "monthly_average",
           "systemIdentity": "RIski",
           "rosVersion": "7.16.2 (stable)",
           "boardName": "RB450Gx4",
-          "uptime": "15h46m17s",
-          "cpuLoad": 15,
-          "freeMemory": "931.0 MiB",
+          "uptime": "16h18m13s",
+          "cpuLoad": 17,
+          "freeMemory": "930.6 MiB",
           "totalMemory": "1024.0 MiB",
           "freeHdd": "483.3 MiB",
           "totalHdd": "512.0 MiB",
@@ -263,7 +311,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0E:81",
               "address": "172.16.255.253",
-              "uptime": "15h45m51s",
+              "uptime": "16h17m48s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -274,7 +322,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:63:34",
               "address": "172.16.255.252",
-              "uptime": "15h45m51s",
+              "uptime": "16h17m48s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -285,7 +333,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0D:B9",
               "address": "172.16.255.251",
-              "uptime": "15h45m51s",
+              "uptime": "16h17m48s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -296,7 +344,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:09:5B",
               "address": "172.16.255.250",
-              "uptime": "15h45m51s",
+              "uptime": "16h17m48s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -307,7 +355,7 @@
               "service": "pppoe",
               "callerId": "FC:A2:DF:72:1D:59",
               "address": "172.16.255.249",
-              "uptime": "15h45m50s",
+              "uptime": "16h17m47s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -318,7 +366,7 @@
               "service": "pppoe",
               "callerId": "FC:A2:DF:71:F1:B9",
               "address": "172.16.255.248",
-              "uptime": "15h45m46s",
+              "uptime": "16h17m43s",
               "profile": "Paket 3 Mbps",
               "comment": "Agung |  | ",
               "isIsolir": false
@@ -329,7 +377,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:46:1A:67",
               "address": "172.16.255.245",
-              "uptime": "15h44m44s",
+              "uptime": "16h16m41s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -340,7 +388,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:56:BA:F2",
               "address": "172.16.255.243",
-              "uptime": "15h44m37s",
+              "uptime": "16h16m34s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -351,7 +399,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:75:10:97",
               "address": "192.168.10.254",
-              "uptime": "15h44m33s",
+              "uptime": "16h16m30s",
               "profile": "Isolir",
               "comment": "",
               "isIsolir": true
@@ -362,7 +410,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:62:EC",
               "address": "172.16.255.241",
-              "uptime": "15h44m33s",
+              "uptime": "16h16m30s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -373,7 +421,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:62:FC",
               "address": "172.16.255.240",
-              "uptime": "15h44m32s",
+              "uptime": "16h16m29s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -384,7 +432,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:12",
               "address": "172.16.255.239",
-              "uptime": "15h44m32s",
+              "uptime": "16h16m29s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -395,7 +443,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:09",
               "address": "172.16.255.238",
-              "uptime": "15h44m32s",
+              "uptime": "16h16m29s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -406,7 +454,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:44:C4:5E",
               "address": "172.16.255.237",
-              "uptime": "15h44m32s",
+              "uptime": "16h16m29s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -417,7 +465,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:0B:5C",
               "address": "172.16.255.232",
-              "uptime": "15h44m28s",
+              "uptime": "16h16m25s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -428,7 +476,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:75:BF:67",
               "address": "172.16.255.229",
-              "uptime": "15h44m27s",
+              "uptime": "16h16m24s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -439,7 +487,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:63:44",
               "address": "172.16.255.227",
-              "uptime": "15h44m26s",
+              "uptime": "16h16m23s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -450,7 +498,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:63:2C",
               "address": "172.16.255.226",
-              "uptime": "15h44m24s",
+              "uptime": "16h16m21s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -461,7 +509,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:1F:53",
               "address": "172.16.255.225",
-              "uptime": "15h44m23s",
+              "uptime": "16h16m20s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -472,7 +520,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:59",
               "address": "172.16.255.224",
-              "uptime": "15h44m23s",
+              "uptime": "16h16m20s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -483,7 +531,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:21",
               "address": "172.16.255.223",
-              "uptime": "15h44m23s",
+              "uptime": "16h16m20s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -494,7 +542,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:12:D1",
               "address": "172.16.255.221",
-              "uptime": "15h44m19s",
+              "uptime": "16h16m16s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -505,7 +553,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:05:FC",
               "address": "172.16.255.219",
-              "uptime": "15h44m17s",
+              "uptime": "16h16m14s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -516,7 +564,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:1E:1B",
               "address": "172.16.255.218",
-              "uptime": "15h44m16s",
+              "uptime": "16h16m13s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -527,7 +575,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:AC:E5:BF",
               "address": "172.16.255.217",
-              "uptime": "15h44m16s",
+              "uptime": "16h16m13s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -538,7 +586,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:08:7B",
               "address": "172.16.255.216",
-              "uptime": "15h44m16s",
+              "uptime": "16h16m13s",
               "profile": "Paket 10 Mbps",
               "comment": "jingga |  | ",
               "isIsolir": false
@@ -549,7 +597,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:0C:FB",
               "address": "172.16.255.213",
-              "uptime": "15h44m14s",
+              "uptime": "16h16m11s",
               "profile": "Paket 10 Mbps",
               "comment": "Jingga62 |  | ",
               "isIsolir": false
@@ -560,7 +608,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:72",
               "address": "172.16.255.212",
-              "uptime": "15h44m14s",
+              "uptime": "16h16m11s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -571,7 +619,7 @@
               "service": "pppoe",
               "callerId": "88:CF:98:DE:2A:9B",
               "address": "172.16.255.211",
-              "uptime": "15h42m56s",
+              "uptime": "16h14m53s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -582,7 +630,7 @@
               "service": "pppoe",
               "callerId": "1C:27:04:88:02:30",
               "address": "172.16.255.210",
-              "uptime": "15h36m1s",
+              "uptime": "16h7m58s",
               "profile": "Paket 10 Mbps",
               "comment": "hijau57 |  | ",
               "isIsolir": false
@@ -593,7 +641,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:45:94:0F",
               "address": "172.16.255.234",
-              "uptime": "14h48m9s",
+              "uptime": "15h20m6s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -604,7 +652,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:45:94:19",
               "address": "172.16.255.244",
-              "uptime": "13h10m28s",
+              "uptime": "13h42m25s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -615,7 +663,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0E:B1",
               "address": "172.16.255.220",
-              "uptime": "12h58m36s",
+              "uptime": "13h30m33s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -626,7 +674,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0D:D1",
               "address": "172.16.255.214",
-              "uptime": "12h5m19s",
+              "uptime": "12h37m16s",
               "profile": "Paket 10 Mbps",
               "comment": "jingga97 |  | ",
               "isIsolir": false
@@ -637,7 +685,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:0B:D3",
               "address": "172.16.255.222",
-              "uptime": "9h54m11s",
+              "uptime": "10h26m8s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -648,7 +696,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0E:A9",
               "address": "172.16.255.228",
-              "uptime": "3h38m55s",
+              "uptime": "4h10m52s",
               "profile": "Paket 10 Mbps",
               "comment": "hijau37 |  | ",
               "isIsolir": false
@@ -659,7 +707,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0C:79",
               "address": "172.16.255.254",
-              "uptime": "2h52m14s",
+              "uptime": "3h24m11s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -670,7 +718,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:06:7B",
               "address": "172.16.255.230",
-              "uptime": "2h10m11s",
+              "uptime": "2h42m8s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -681,18 +729,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:0B:3B",
               "address": "172.16.255.215",
-              "uptime": "1h47m2s",
-              "profile": "Paket 10 Mbps",
-              "comment": "",
-              "isIsolir": false
-            },
-            {
-              "id": "*8000013E",
-              "name": "Hijau59",
-              "service": "pppoe",
-              "callerId": "C4:CD:50:44:C4:22",
-              "address": "172.16.255.235",
-              "uptime": "24m54s",
+              "uptime": "2h18m59s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -703,40 +740,62 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:44:C4:40",
               "address": "172.16.255.246",
-              "uptime": "14m44s",
+              "uptime": "46m41s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
             },
             {
-              "id": "*80000145",
-              "name": "Kuning19",
+              "id": "*8000014F",
+              "name": "Hijau59",
               "service": "pppoe",
-              "callerId": "C4:CD:50:44:C4:68",
-              "address": "172.16.255.231",
-              "uptime": "10m1s",
+              "callerId": "C4:CD:50:44:C4:22",
+              "address": "172.16.255.235",
+              "uptime": "19m4s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
             },
             {
-              "id": "*80000146",
+              "id": "*80000154",
               "name": "Nila2",
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0A:69",
               "address": "172.16.255.233",
+              "uptime": "7m41s",
+              "profile": "Paket 10 Mbps",
+              "comment": "",
+              "isIsolir": false
+            },
+            {
+              "id": "*80000155",
+              "name": "Test",
+              "service": "pppoe",
+              "callerId": "C4:CD:50:45:E1:90",
+              "address": "172.16.255.247",
               "uptime": "5m55s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
             },
             {
-              "id": "*80000147",
-              "name": "Test",
+              "id": "*80000156",
+              "name": "Jingga63",
               "service": "pppoe",
-              "callerId": "C4:CD:50:45:E1:90",
-              "address": "172.16.255.247",
-              "uptime": "4m47s",
+              "callerId": "C4:CD:50:46:1A:70",
+              "address": "172.16.255.242",
+              "uptime": "1m",
+              "profile": "Paket 20 Mbps",
+              "comment": "",
+              "isIsolir": false
+            },
+            {
+              "id": "*80000157",
+              "name": "Kuning19",
+              "service": "pppoe",
+              "callerId": "C4:CD:50:44:C4:68",
+              "address": "172.16.255.231",
+              "uptime": "53s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -752,7 +811,7 @@
       },
       "items": [
         {
-          "id": "item-noc-inv-1790441148629-161-1790772400694",
+          "id": "item-noc-inv-1790441148629-161-1790774317496",
           "description": "Layanan NOC & Bandwidth PPPoE [ACO (CCR2004-16G-2S+)] - Rata-rata 44 User Aktif Non-Isolir Bulan September 2026 (@ Rp 5.000)",
           "quantity": 44,
           "price": 5000,
@@ -782,7 +841,7 @@
       "whatsappNotified": false,
       "spreadsheetSynced": true,
       "createdAt": "2026-09-26T16:45:48.557Z",
-      "updatedAt": "2026-09-30T12:46:40.694Z"
+      "updatedAt": "2026-09-30T13:18:37.496Z"
     },
     {
       "id": "inv-1790092738986-386",
@@ -848,107 +907,17 @@
           "ratePerUser": 5000,
           "isolirProfileName": "isolir",
           "connectionStatus": "connected",
-          "lastSyncedAt": "2026-09-30T12:46:40.694Z",
+          "lastSyncedAt": "2026-09-30T13:18:37.496Z",
           "totalPppoeSecrets": 52,
           "totalSecretsNonIsolir": 47,
           "totalSecretsIsolir": 5,
-          "activePppoeCount": 44,
-          "nonIsolirCount": 43,
+          "activePppoeCount": 45,
+          "nonIsolirCount": 44,
           "isolirCount": 1,
           "hotspotActiveCount": 0,
           "hotspotUsersCount": 1,
           "monthlyAverageNonIsolir": 44,
           "samples": [
-            {
-              "timestamp": "2026-09-26T14:16:54.811Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T14:17:04.321Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T14:42:16.857Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T14:42:20.697Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T16:46:57.357Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-26T16:46:58.671Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:24:50.026Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:25:21.238Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:25:22.758Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:25:51.081Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:25:52.844Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-28T11:34:49.565Z",
-              "activeCount": 46,
-              "nonIsolirCount": 44,
-              "isolirCount": 2
-            },
-            {
-              "timestamp": "2026-09-30T12:39:53.907Z",
-              "activeCount": 45,
-              "nonIsolirCount": 44,
-              "isolirCount": 1
-            },
-            {
-              "timestamp": "2026-09-30T12:40:00.587Z",
-              "activeCount": 45,
-              "nonIsolirCount": 44,
-              "isolirCount": 1
-            },
-            {
-              "timestamp": "2026-09-30T12:42:13.062Z",
-              "activeCount": 45,
-              "nonIsolirCount": 44,
-              "isolirCount": 1
-            },
             {
               "timestamp": "2026-09-30T12:42:18.795Z",
               "activeCount": 45,
@@ -990,15 +959,153 @@
               "activeCount": 44,
               "nonIsolirCount": 43,
               "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T12:51:40.516Z",
+              "activeCount": 44,
+              "nonIsolirCount": 43,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:04:27.401Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:04:32.372Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:05:48.255Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:05:53.625Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:07:12.163Z",
+              "activeCount": 44,
+              "nonIsolirCount": 43,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:07:16.297Z",
+              "activeCount": 44,
+              "nonIsolirCount": 43,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:08:33.867Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:08:38.319Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:09:57.438Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:10:01.097Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:11:18.443Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:11:23.564Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:12:40.616Z",
+              "activeCount": 44,
+              "nonIsolirCount": 43,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:12:44.847Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:14:19.103Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:14:24.045Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:15:41.969Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:15:45.539Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:17:03.493Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:17:10.131Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:18:31.328Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
+            },
+            {
+              "timestamp": "2026-09-30T13:18:37.496Z",
+              "activeCount": 45,
+              "nonIsolirCount": 44,
+              "isolirCount": 1
             }
           ],
           "preferredBillingMethod": "monthly_average",
           "systemIdentity": "RIski",
           "rosVersion": "7.16.2 (stable)",
           "boardName": "RB450Gx4",
-          "uptime": "15h46m17s",
-          "cpuLoad": 15,
-          "freeMemory": "931.0 MiB",
+          "uptime": "16h18m13s",
+          "cpuLoad": 17,
+          "freeMemory": "930.6 MiB",
           "totalMemory": "1024.0 MiB",
           "freeHdd": "483.3 MiB",
           "totalHdd": "512.0 MiB",
@@ -1010,7 +1117,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0E:81",
               "address": "172.16.255.253",
-              "uptime": "15h45m51s",
+              "uptime": "16h17m48s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1021,7 +1128,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:63:34",
               "address": "172.16.255.252",
-              "uptime": "15h45m51s",
+              "uptime": "16h17m48s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1032,7 +1139,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0D:B9",
               "address": "172.16.255.251",
-              "uptime": "15h45m51s",
+              "uptime": "16h17m48s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1043,7 +1150,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:09:5B",
               "address": "172.16.255.250",
-              "uptime": "15h45m51s",
+              "uptime": "16h17m48s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1054,7 +1161,7 @@
               "service": "pppoe",
               "callerId": "FC:A2:DF:72:1D:59",
               "address": "172.16.255.249",
-              "uptime": "15h45m50s",
+              "uptime": "16h17m47s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1065,7 +1172,7 @@
               "service": "pppoe",
               "callerId": "FC:A2:DF:71:F1:B9",
               "address": "172.16.255.248",
-              "uptime": "15h45m46s",
+              "uptime": "16h17m43s",
               "profile": "Paket 3 Mbps",
               "comment": "Agung |  | ",
               "isIsolir": false
@@ -1076,7 +1183,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:46:1A:67",
               "address": "172.16.255.245",
-              "uptime": "15h44m44s",
+              "uptime": "16h16m41s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1087,7 +1194,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:56:BA:F2",
               "address": "172.16.255.243",
-              "uptime": "15h44m37s",
+              "uptime": "16h16m34s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1098,7 +1205,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:75:10:97",
               "address": "192.168.10.254",
-              "uptime": "15h44m33s",
+              "uptime": "16h16m30s",
               "profile": "Isolir",
               "comment": "",
               "isIsolir": true
@@ -1109,7 +1216,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:62:EC",
               "address": "172.16.255.241",
-              "uptime": "15h44m33s",
+              "uptime": "16h16m30s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1120,7 +1227,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:62:FC",
               "address": "172.16.255.240",
-              "uptime": "15h44m32s",
+              "uptime": "16h16m29s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1131,7 +1238,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:12",
               "address": "172.16.255.239",
-              "uptime": "15h44m32s",
+              "uptime": "16h16m29s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1142,7 +1249,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:09",
               "address": "172.16.255.238",
-              "uptime": "15h44m32s",
+              "uptime": "16h16m29s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1153,7 +1260,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:44:C4:5E",
               "address": "172.16.255.237",
-              "uptime": "15h44m32s",
+              "uptime": "16h16m29s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1164,7 +1271,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:0B:5C",
               "address": "172.16.255.232",
-              "uptime": "15h44m28s",
+              "uptime": "16h16m25s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1175,7 +1282,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:75:BF:67",
               "address": "172.16.255.229",
-              "uptime": "15h44m27s",
+              "uptime": "16h16m24s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1186,7 +1293,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:63:44",
               "address": "172.16.255.227",
-              "uptime": "15h44m26s",
+              "uptime": "16h16m23s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1197,7 +1304,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:12:63:2C",
               "address": "172.16.255.226",
-              "uptime": "15h44m24s",
+              "uptime": "16h16m21s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1208,7 +1315,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:1F:53",
               "address": "172.16.255.225",
-              "uptime": "15h44m23s",
+              "uptime": "16h16m20s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1219,7 +1326,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:59",
               "address": "172.16.255.224",
-              "uptime": "15h44m23s",
+              "uptime": "16h16m20s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1230,7 +1337,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:21",
               "address": "172.16.255.223",
-              "uptime": "15h44m23s",
+              "uptime": "16h16m20s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1241,7 +1348,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:12:D1",
               "address": "172.16.255.221",
-              "uptime": "15h44m19s",
+              "uptime": "16h16m16s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1252,7 +1359,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:05:FC",
               "address": "172.16.255.219",
-              "uptime": "15h44m17s",
+              "uptime": "16h16m14s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1263,7 +1370,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:1E:1B",
               "address": "172.16.255.218",
-              "uptime": "15h44m16s",
+              "uptime": "16h16m13s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1274,7 +1381,7 @@
               "service": "pppoe",
               "callerId": "D0:5F:AF:AC:E5:BF",
               "address": "172.16.255.217",
-              "uptime": "15h44m16s",
+              "uptime": "16h16m13s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1285,7 +1392,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:08:7B",
               "address": "172.16.255.216",
-              "uptime": "15h44m16s",
+              "uptime": "16h16m13s",
               "profile": "Paket 10 Mbps",
               "comment": "jingga |  | ",
               "isIsolir": false
@@ -1296,7 +1403,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:0C:FB",
               "address": "172.16.255.213",
-              "uptime": "15h44m14s",
+              "uptime": "16h16m11s",
               "profile": "Paket 10 Mbps",
               "comment": "Jingga62 |  | ",
               "isIsolir": false
@@ -1307,7 +1414,7 @@
               "service": "pppoe",
               "callerId": "50:5B:1D:F3:5B:72",
               "address": "172.16.255.212",
-              "uptime": "15h44m14s",
+              "uptime": "16h16m11s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1318,7 +1425,7 @@
               "service": "pppoe",
               "callerId": "88:CF:98:DE:2A:9B",
               "address": "172.16.255.211",
-              "uptime": "15h42m56s",
+              "uptime": "16h14m53s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1329,7 +1436,7 @@
               "service": "pppoe",
               "callerId": "1C:27:04:88:02:30",
               "address": "172.16.255.210",
-              "uptime": "15h36m1s",
+              "uptime": "16h7m58s",
               "profile": "Paket 10 Mbps",
               "comment": "hijau57 |  | ",
               "isIsolir": false
@@ -1340,7 +1447,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:45:94:0F",
               "address": "172.16.255.234",
-              "uptime": "14h48m9s",
+              "uptime": "15h20m6s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1351,7 +1458,7 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:45:94:19",
               "address": "172.16.255.244",
-              "uptime": "13h10m28s",
+              "uptime": "13h42m25s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1362,7 +1469,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0E:B1",
               "address": "172.16.255.220",
-              "uptime": "12h58m36s",
+              "uptime": "13h30m33s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1373,7 +1480,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0D:D1",
               "address": "172.16.255.214",
-              "uptime": "12h5m19s",
+              "uptime": "12h37m16s",
               "profile": "Paket 10 Mbps",
               "comment": "jingga97 |  | ",
               "isIsolir": false
@@ -1384,7 +1491,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:0B:D3",
               "address": "172.16.255.222",
-              "uptime": "9h54m11s",
+              "uptime": "10h26m8s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1395,7 +1502,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0E:A9",
               "address": "172.16.255.228",
-              "uptime": "3h38m55s",
+              "uptime": "4h10m52s",
               "profile": "Paket 10 Mbps",
               "comment": "hijau37 |  | ",
               "isIsolir": false
@@ -1406,7 +1513,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0C:79",
               "address": "172.16.255.254",
-              "uptime": "2h52m14s",
+              "uptime": "3h24m11s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1417,7 +1524,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:06:7B",
               "address": "172.16.255.230",
-              "uptime": "2h10m11s",
+              "uptime": "2h42m8s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1428,18 +1535,7 @@
               "service": "pppoe",
               "callerId": "80:F7:A6:B7:0B:3B",
               "address": "172.16.255.215",
-              "uptime": "1h47m2s",
-              "profile": "Paket 10 Mbps",
-              "comment": "",
-              "isIsolir": false
-            },
-            {
-              "id": "*8000013E",
-              "name": "Hijau59",
-              "service": "pppoe",
-              "callerId": "C4:CD:50:44:C4:22",
-              "address": "172.16.255.235",
-              "uptime": "24m54s",
+              "uptime": "2h18m59s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1450,40 +1546,62 @@
               "service": "pppoe",
               "callerId": "C4:CD:50:44:C4:40",
               "address": "172.16.255.246",
-              "uptime": "14m44s",
+              "uptime": "46m41s",
               "profile": "Paket 20 Mbps",
               "comment": "",
               "isIsolir": false
             },
             {
-              "id": "*80000145",
-              "name": "Kuning19",
+              "id": "*8000014F",
+              "name": "Hijau59",
               "service": "pppoe",
-              "callerId": "C4:CD:50:44:C4:68",
-              "address": "172.16.255.231",
-              "uptime": "10m1s",
+              "callerId": "C4:CD:50:44:C4:22",
+              "address": "172.16.255.235",
+              "uptime": "19m4s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
             },
             {
-              "id": "*80000146",
+              "id": "*80000154",
               "name": "Nila2",
               "service": "pppoe",
               "callerId": "80:F7:A6:A9:0A:69",
               "address": "172.16.255.233",
+              "uptime": "7m41s",
+              "profile": "Paket 10 Mbps",
+              "comment": "",
+              "isIsolir": false
+            },
+            {
+              "id": "*80000155",
+              "name": "Test",
+              "service": "pppoe",
+              "callerId": "C4:CD:50:45:E1:90",
+              "address": "172.16.255.247",
               "uptime": "5m55s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
             },
             {
-              "id": "*80000147",
-              "name": "Test",
+              "id": "*80000156",
+              "name": "Jingga63",
               "service": "pppoe",
-              "callerId": "C4:CD:50:45:E1:90",
-              "address": "172.16.255.247",
-              "uptime": "4m47s",
+              "callerId": "C4:CD:50:46:1A:70",
+              "address": "172.16.255.242",
+              "uptime": "1m",
+              "profile": "Paket 20 Mbps",
+              "comment": "",
+              "isIsolir": false
+            },
+            {
+              "id": "*80000157",
+              "name": "Kuning19",
+              "service": "pppoe",
+              "callerId": "C4:CD:50:44:C4:68",
+              "address": "172.16.255.231",
+              "uptime": "53s",
               "profile": "Paket 10 Mbps",
               "comment": "",
               "isIsolir": false
@@ -1499,7 +1617,7 @@
       },
       "items": [
         {
-          "id": "item-noc-inv-inv-202609-004-1790772400723",
+          "id": "item-noc-inv-inv-202609-004-1790774317524",
           "description": "Layanan NOC & Bandwidth PPPoE [ACO (CCR2004-16G-2S+)] - Rata-rata 44 User Aktif Non-Isolir Bulan September 2026 (@ Rp 5.000)",
           "quantity": 44,
           "price": 5000,
@@ -1529,7 +1647,7 @@
       "whatsappNotified": false,
       "spreadsheetSynced": true,
       "createdAt": "2026-09-21T16:45:20.861Z",
-      "updatedAt": "2026-09-30T12:46:40.723Z"
+      "updatedAt": "2026-09-30T13:18:37.524Z"
     },
     {
       "id": "inv-inv-202609-005",
@@ -1668,76 +1786,16 @@
           "isolirProfileName": "isolir",
           "connectionType": "auto",
           "connectionStatus": "connected",
-          "lastSyncedAt": "2026-09-30T12:47:09.886Z",
+          "lastSyncedAt": "2026-09-30T13:18:51.744Z",
           "totalPppoeSecrets": 158,
           "totalSecretsNonIsolir": 98,
           "totalSecretsIsolir": 60,
           "activePppoeCount": 0,
           "nonIsolirCount": 0,
           "isolirCount": 0,
-          "hotspotActiveCount": 76,
-          "monthlyAverageNonIsolir": 34,
+          "hotspotActiveCount": 74,
+          "monthlyAverageNonIsolir": 0,
           "samples": [
-            {
-              "timestamp": "2026-09-26T14:04:20.558Z",
-              "activeCount": 141,
-              "nonIsolirCount": 88,
-              "isolirCount": 53
-            },
-            {
-              "timestamp": "2026-09-26T14:04:35.940Z",
-              "activeCount": 141,
-              "nonIsolirCount": 88,
-              "isolirCount": 53
-            },
-            {
-              "timestamp": "2026-09-26T14:05:29.198Z",
-              "activeCount": 141,
-              "nonIsolirCount": 88,
-              "isolirCount": 53
-            },
-            {
-              "timestamp": "2026-09-26T14:05:35.683Z",
-              "activeCount": 141,
-              "nonIsolirCount": 88,
-              "isolirCount": 53
-            },
-            {
-              "timestamp": "2026-09-26T14:06:10.330Z",
-              "activeCount": 141,
-              "nonIsolirCount": 88,
-              "isolirCount": 53
-            },
-            {
-              "timestamp": "2026-09-26T14:07:50.933Z",
-              "activeCount": 141,
-              "nonIsolirCount": 88,
-              "isolirCount": 53
-            },
-            {
-              "timestamp": "2026-09-26T14:07:57.715Z",
-              "activeCount": 141,
-              "nonIsolirCount": 88,
-              "isolirCount": 53
-            },
-            {
-              "timestamp": "2026-09-30T11:39:56.311Z",
-              "activeCount": 0,
-              "nonIsolirCount": 0,
-              "isolirCount": 0
-            },
-            {
-              "timestamp": "2026-09-30T12:40:14.503Z",
-              "activeCount": 0,
-              "nonIsolirCount": 0,
-              "isolirCount": 0
-            },
-            {
-              "timestamp": "2026-09-30T12:40:27.694Z",
-              "activeCount": 0,
-              "nonIsolirCount": 0,
-              "isolirCount": 0
-            },
             {
               "timestamp": "2026-09-30T12:42:33.484Z",
               "activeCount": 0,
@@ -1785,17 +1843,149 @@
               "activeCount": 0,
               "nonIsolirCount": 0,
               "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T12:51:52.929Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:04:44.795Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:04:57.940Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:06:07.305Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:06:22.064Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:07:29.900Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:07:43.905Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:08:53.873Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:09:06.309Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:10:13.830Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:10:27.979Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:11:36.653Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:11:49.667Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:12:57.933Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:13:12.007Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:14:38.004Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:14:51.518Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:15:58.292Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:16:12.771Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:17:23.446Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:17:36.813Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
+            },
+            {
+              "timestamp": "2026-09-30T13:18:51.744Z",
+              "activeCount": 0,
+              "nonIsolirCount": 0,
+              "isolirCount": 0
             }
           ],
           "preferredBillingMethod": "monthly_average",
           "systemIdentity": "ACO",
           "rosVersion": "7.20.8 (long-term)",
           "boardName": "CCR2004-16G-2S+",
-          "uptime": "1d8h26m25s",
-          "cpuLoad": 3,
-          "freeMemory": "3717.5 MiB",
+          "uptime": "1d8h58m7s",
+          "cpuLoad": 9,
+          "freeMemory": "3717.1 MiB",
           "totalMemory": "4096.0 MiB",
-          "freeHdd": "67.8 MiB",
+          "freeHdd": "69.9 MiB",
           "totalHdd": "128.0 MiB",
           "architectureName": "arm64",
           "activeUsersList": [],
@@ -1804,30 +1994,30 @@
       },
       "items": [
         {
-          "id": "item-noc-inv-inv-202609-001-1790772429887",
-          "description": "Layanan NOC & Bandwidth PPPoE [ACO (CCR2004-16G-2S+)] - Rata-rata 36 User Aktif Non-Isolir Bulan September 2026 (@ Rp 10.000)",
-          "quantity": 36,
+          "id": "item-noc-inv-inv-202609-001-1790774331744",
+          "description": "Layanan NOC & Bandwidth PPPoE [ACO (CCR2004-16G-2S+)] - Rata-rata 0 User Aktif Non-Isolir Bulan September 2026 (@ Rp 10.000)",
+          "quantity": 0,
           "price": 10000,
-          "total": 360000
+          "total": 0
         }
       ],
-      "subtotal": 360000,
+      "subtotal": 0,
       "taxPercent": 11,
-      "taxAmount": 39600,
+      "taxAmount": 0,
       "discountAmount": 0,
-      "totalAmount": 399600,
+      "totalAmount": 0,
       "paidAmount": 0,
       "notes": "Tagihan rutin bulanan periode September 2026 berdasarkan 88 user PPPoE aktif non-isolir @ Rp 10.000. Pembayaran via QRIS Dinamis terlampir.",
       "paymentTerms": "Jatuh tempo pembayaran maksimal tanggal 2026-09-10.",
       "staticQris": "00020101021126570011ID.DANA.WWW011893600915356761342102095676134210303UMI51440014ID.CO.QRIS.WWW0215ID10233067778720303UMI5204737253033605802ID5911hendr.store6013Kab. Pemalang6105523716304F609",
-      "dynamicQris": "00020101021226570011ID.DANA.WWW011893600915356761342102095676134210303UMI51440014ID.CO.QRIS.WWW0215ID10233067778720303UMI52047372530336054063996005802ID5911hendr.store6013Kab. Pemalang61055237162180114INV-202609-0016304C465",
-      "dynamicQrisDataUrl": "data:image/png;base64,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",
+      "dynamicQris": "00020101021226570011ID.DANA.WWW011893600915356761342102095676134210303UMI51440014ID.CO.QRIS.WWW0215ID10233067778720303UMI5204737253033605802ID5911hendr.store6013Kab. Pemalang61055237162180114INV-202609-001630491BC",
+      "dynamicQrisDataUrl": "data:image/png;base64,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",
       "transactions": [],
       "reminders": [],
       "whatsappNotified": false,
       "spreadsheetSynced": true,
       "createdAt": "2026-09-20T05:51:52.074Z",
-      "updatedAt": "2026-09-30T12:47:09.887Z"
+      "updatedAt": "2026-09-30T13:18:51.744Z"
     },
     {
       "id": "inv-inv-2026-001",
@@ -2041,107 +2231,17 @@
         "ratePerUser": 5000,
         "isolirProfileName": "isolir",
         "connectionStatus": "connected",
-        "lastSyncedAt": "2026-09-30T12:51:40.516Z",
+        "lastSyncedAt": "2026-09-30T13:18:37.496Z",
         "totalPppoeSecrets": 52,
         "totalSecretsNonIsolir": 47,
         "totalSecretsIsolir": 5,
-        "activePppoeCount": 44,
-        "nonIsolirCount": 43,
+        "activePppoeCount": 45,
+        "nonIsolirCount": 44,
         "isolirCount": 1,
         "hotspotActiveCount": 0,
         "hotspotUsersCount": 1,
         "monthlyAverageNonIsolir": 44,
         "samples": [
-          {
-            "timestamp": "2026-09-26T14:16:54.811Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-26T14:17:04.321Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-26T14:42:16.857Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-26T14:42:20.697Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-26T16:46:57.357Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-26T16:46:58.671Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-28T11:24:50.026Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-28T11:25:21.238Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-28T11:25:22.758Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-28T11:25:51.081Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-28T11:25:52.844Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-28T11:34:49.565Z",
-            "activeCount": 46,
-            "nonIsolirCount": 44,
-            "isolirCount": 2
-          },
-          {
-            "timestamp": "2026-09-30T12:39:53.907Z",
-            "activeCount": 45,
-            "nonIsolirCount": 44,
-            "isolirCount": 1
-          },
-          {
-            "timestamp": "2026-09-30T12:40:00.587Z",
-            "activeCount": 45,
-            "nonIsolirCount": 44,
-            "isolirCount": 1
-          },
-          {
-            "timestamp": "2026-09-30T12:42:13.062Z",
-            "activeCount": 45,
-            "nonIsolirCount": 44,
-            "isolirCount": 1
-          },
           {
             "timestamp": "2026-09-30T12:42:18.795Z",
             "activeCount": 45,
@@ -2189,17 +2289,149 @@
             "activeCount": 44,
             "nonIsolirCount": 43,
             "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:04:27.401Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:04:32.372Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:05:48.255Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:05:53.625Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:07:12.163Z",
+            "activeCount": 44,
+            "nonIsolirCount": 43,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:07:16.297Z",
+            "activeCount": 44,
+            "nonIsolirCount": 43,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:08:33.867Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:08:38.319Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:09:57.438Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:10:01.097Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:11:18.443Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:11:23.564Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:12:40.616Z",
+            "activeCount": 44,
+            "nonIsolirCount": 43,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:12:44.847Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:14:19.103Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:14:24.045Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:15:41.969Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:15:45.539Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:17:03.493Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:17:10.131Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:18:31.328Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
+          },
+          {
+            "timestamp": "2026-09-30T13:18:37.496Z",
+            "activeCount": 45,
+            "nonIsolirCount": 44,
+            "isolirCount": 1
           }
         ],
         "preferredBillingMethod": "monthly_average",
         "systemIdentity": "RIski",
         "rosVersion": "7.16.2 (stable)",
         "boardName": "RB450Gx4",
-        "uptime": "15h51m18s",
-        "cpuLoad": 21,
-        "freeMemory": "932.3 MiB",
+        "uptime": "16h18m13s",
+        "cpuLoad": 17,
+        "freeMemory": "930.6 MiB",
         "totalMemory": "1024.0 MiB",
-        "freeHdd": "483.4 MiB",
+        "freeHdd": "483.3 MiB",
         "totalHdd": "512.0 MiB",
         "architectureName": "arm",
         "activeUsersList": [
@@ -2209,7 +2441,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:A9:0E:81",
             "address": "172.16.255.253",
-            "uptime": "15h50m52s",
+            "uptime": "16h17m48s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2220,7 +2452,7 @@
             "service": "pppoe",
             "callerId": "D0:5F:AF:12:63:34",
             "address": "172.16.255.252",
-            "uptime": "15h50m52s",
+            "uptime": "16h17m48s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2231,7 +2463,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:A9:0D:B9",
             "address": "172.16.255.251",
-            "uptime": "15h50m52s",
+            "uptime": "16h17m48s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2242,7 +2474,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:09:5B",
             "address": "172.16.255.250",
-            "uptime": "15h50m52s",
+            "uptime": "16h17m48s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2253,7 +2485,7 @@
             "service": "pppoe",
             "callerId": "FC:A2:DF:72:1D:59",
             "address": "172.16.255.249",
-            "uptime": "15h50m51s",
+            "uptime": "16h17m47s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2264,7 +2496,7 @@
             "service": "pppoe",
             "callerId": "FC:A2:DF:71:F1:B9",
             "address": "172.16.255.248",
-            "uptime": "15h50m47s",
+            "uptime": "16h17m43s",
             "profile": "Paket 3 Mbps",
             "comment": "Agung |  | ",
             "isIsolir": false
@@ -2275,7 +2507,7 @@
             "service": "pppoe",
             "callerId": "C4:CD:50:46:1A:67",
             "address": "172.16.255.245",
-            "uptime": "15h49m45s",
+            "uptime": "16h16m41s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2286,7 +2518,7 @@
             "service": "pppoe",
             "callerId": "C4:CD:50:56:BA:F2",
             "address": "172.16.255.243",
-            "uptime": "15h49m38s",
+            "uptime": "16h16m34s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2297,7 +2529,7 @@
             "service": "pppoe",
             "callerId": "D0:5F:AF:75:10:97",
             "address": "192.168.10.254",
-            "uptime": "15h49m34s",
+            "uptime": "16h16m30s",
             "profile": "Isolir",
             "comment": "",
             "isIsolir": true
@@ -2308,7 +2540,7 @@
             "service": "pppoe",
             "callerId": "D0:5F:AF:12:62:EC",
             "address": "172.16.255.241",
-            "uptime": "15h49m34s",
+            "uptime": "16h16m30s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2319,7 +2551,7 @@
             "service": "pppoe",
             "callerId": "D0:5F:AF:12:62:FC",
             "address": "172.16.255.240",
-            "uptime": "15h49m33s",
+            "uptime": "16h16m29s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2330,7 +2562,7 @@
             "service": "pppoe",
             "callerId": "50:5B:1D:F3:5B:12",
             "address": "172.16.255.239",
-            "uptime": "15h49m33s",
+            "uptime": "16h16m29s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2341,7 +2573,7 @@
             "service": "pppoe",
             "callerId": "50:5B:1D:F3:5B:09",
             "address": "172.16.255.238",
-            "uptime": "15h49m33s",
+            "uptime": "16h16m29s",
             "profile": "Paket 20 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2352,7 +2584,7 @@
             "service": "pppoe",
             "callerId": "C4:CD:50:44:C4:5E",
             "address": "172.16.255.237",
-            "uptime": "15h49m33s",
+            "uptime": "16h16m29s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2363,7 +2595,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:0B:5C",
             "address": "172.16.255.232",
-            "uptime": "15h49m29s",
+            "uptime": "16h16m25s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2374,7 +2606,7 @@
             "service": "pppoe",
             "callerId": "D0:5F:AF:75:BF:67",
             "address": "172.16.255.229",
-            "uptime": "15h49m28s",
+            "uptime": "16h16m24s",
             "profile": "Paket 20 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2385,7 +2617,7 @@
             "service": "pppoe",
             "callerId": "D0:5F:AF:12:63:44",
             "address": "172.16.255.227",
-            "uptime": "15h49m27s",
+            "uptime": "16h16m23s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2396,7 +2628,7 @@
             "service": "pppoe",
             "callerId": "D0:5F:AF:12:63:2C",
             "address": "172.16.255.226",
-            "uptime": "15h49m25s",
+            "uptime": "16h16m21s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2407,7 +2639,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:1F:53",
             "address": "172.16.255.225",
-            "uptime": "15h49m24s",
+            "uptime": "16h16m20s",
             "profile": "Paket 20 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2418,7 +2650,7 @@
             "service": "pppoe",
             "callerId": "50:5B:1D:F3:5B:59",
             "address": "172.16.255.224",
-            "uptime": "15h49m24s",
+            "uptime": "16h16m20s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2429,7 +2661,7 @@
             "service": "pppoe",
             "callerId": "50:5B:1D:F3:5B:21",
             "address": "172.16.255.223",
-            "uptime": "15h49m24s",
+            "uptime": "16h16m20s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2440,7 +2672,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:A9:12:D1",
             "address": "172.16.255.221",
-            "uptime": "15h49m20s",
+            "uptime": "16h16m16s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2451,7 +2683,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:05:FC",
             "address": "172.16.255.219",
-            "uptime": "15h49m18s",
+            "uptime": "16h16m14s",
             "profile": "Paket 20 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2462,7 +2694,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:1E:1B",
             "address": "172.16.255.218",
-            "uptime": "15h49m17s",
+            "uptime": "16h16m13s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2473,7 +2705,7 @@
             "service": "pppoe",
             "callerId": "D0:5F:AF:AC:E5:BF",
             "address": "172.16.255.217",
-            "uptime": "15h49m17s",
+            "uptime": "16h16m13s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2484,7 +2716,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:08:7B",
             "address": "172.16.255.216",
-            "uptime": "15h49m17s",
+            "uptime": "16h16m13s",
             "profile": "Paket 10 Mbps",
             "comment": "jingga |  | ",
             "isIsolir": false
@@ -2495,7 +2727,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:0C:FB",
             "address": "172.16.255.213",
-            "uptime": "15h49m15s",
+            "uptime": "16h16m11s",
             "profile": "Paket 10 Mbps",
             "comment": "Jingga62 |  | ",
             "isIsolir": false
@@ -2506,7 +2738,7 @@
             "service": "pppoe",
             "callerId": "50:5B:1D:F3:5B:72",
             "address": "172.16.255.212",
-            "uptime": "15h49m15s",
+            "uptime": "16h16m11s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2517,7 +2749,7 @@
             "service": "pppoe",
             "callerId": "88:CF:98:DE:2A:9B",
             "address": "172.16.255.211",
-            "uptime": "15h47m57s",
+            "uptime": "16h14m53s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2528,7 +2760,7 @@
             "service": "pppoe",
             "callerId": "1C:27:04:88:02:30",
             "address": "172.16.255.210",
-            "uptime": "15h41m2s",
+            "uptime": "16h7m58s",
             "profile": "Paket 10 Mbps",
             "comment": "hijau57 |  | ",
             "isIsolir": false
@@ -2539,7 +2771,7 @@
             "service": "pppoe",
             "callerId": "C4:CD:50:45:94:0F",
             "address": "172.16.255.234",
-            "uptime": "14h53m10s",
+            "uptime": "15h20m6s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2550,7 +2782,7 @@
             "service": "pppoe",
             "callerId": "C4:CD:50:45:94:19",
             "address": "172.16.255.244",
-            "uptime": "13h15m29s",
+            "uptime": "13h42m25s",
             "profile": "Paket 20 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2561,7 +2793,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:A9:0E:B1",
             "address": "172.16.255.220",
-            "uptime": "13h3m37s",
+            "uptime": "13h30m33s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2572,7 +2804,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:A9:0D:D1",
             "address": "172.16.255.214",
-            "uptime": "12h10m20s",
+            "uptime": "12h37m16s",
             "profile": "Paket 10 Mbps",
             "comment": "jingga97 |  | ",
             "isIsolir": false
@@ -2583,7 +2815,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:0B:D3",
             "address": "172.16.255.222",
-            "uptime": "9h59m12s",
+            "uptime": "10h26m8s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2594,7 +2826,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:A9:0E:A9",
             "address": "172.16.255.228",
-            "uptime": "3h43m56s",
+            "uptime": "4h10m52s",
             "profile": "Paket 10 Mbps",
             "comment": "hijau37 |  | ",
             "isIsolir": false
@@ -2605,7 +2837,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:A9:0C:79",
             "address": "172.16.255.254",
-            "uptime": "2h57m15s",
+            "uptime": "3h24m11s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2616,7 +2848,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:06:7B",
             "address": "172.16.255.230",
-            "uptime": "2h15m12s",
+            "uptime": "2h42m8s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2627,7 +2859,7 @@
             "service": "pppoe",
             "callerId": "80:F7:A6:B7:0B:3B",
             "address": "172.16.255.215",
-            "uptime": "1h52m3s",
+            "uptime": "2h18m59s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2638,51 +2870,62 @@
             "service": "pppoe",
             "callerId": "C4:CD:50:44:C4:40",
             "address": "172.16.255.246",
-            "uptime": "19m45s",
+            "uptime": "46m41s",
             "profile": "Paket 20 Mbps",
             "comment": "",
             "isIsolir": false
           },
           {
-            "id": "*80000147",
-            "name": "Test",
+            "id": "*8000014F",
+            "name": "Hijau59",
             "service": "pppoe",
-            "callerId": "C4:CD:50:45:E1:90",
-            "address": "172.16.255.247",
-            "uptime": "9m48s",
+            "callerId": "C4:CD:50:44:C4:22",
+            "address": "172.16.255.235",
+            "uptime": "19m4s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
           },
           {
-            "id": "*80000148",
-            "name": "Jingga63",
-            "service": "pppoe",
-            "callerId": "C4:CD:50:46:1A:70",
-            "address": "172.16.255.242",
-            "uptime": "4m53s",
-            "profile": "Paket 20 Mbps",
-            "comment": "",
-            "isIsolir": false
-          },
-          {
-            "id": "*80000149",
-            "name": "Kuning19",
-            "service": "pppoe",
-            "callerId": "C4:CD:50:44:C4:68",
-            "address": "172.16.255.231",
-            "uptime": "4m46s",
-            "profile": "Paket 10 Mbps",
-            "comment": "",
-            "isIsolir": false
-          },
-          {
-            "id": "*8000014A",
+            "id": "*80000154",
             "name": "Nila2",
             "service": "pppoe",
             "callerId": "80:F7:A6:A9:0A:69",
             "address": "172.16.255.233",
-            "uptime": "52s",
+            "uptime": "7m41s",
+            "profile": "Paket 10 Mbps",
+            "comment": "",
+            "isIsolir": false
+          },
+          {
+            "id": "*80000155",
+            "name": "Test",
+            "service": "pppoe",
+            "callerId": "C4:CD:50:45:E1:90",
+            "address": "172.16.255.247",
+            "uptime": "5m55s",
+            "profile": "Paket 10 Mbps",
+            "comment": "",
+            "isIsolir": false
+          },
+          {
+            "id": "*80000156",
+            "name": "Jingga63",
+            "service": "pppoe",
+            "callerId": "C4:CD:50:46:1A:70",
+            "address": "172.16.255.242",
+            "uptime": "1m",
+            "profile": "Paket 20 Mbps",
+            "comment": "",
+            "isIsolir": false
+          },
+          {
+            "id": "*80000157",
+            "name": "Kuning19",
+            "service": "pppoe",
+            "callerId": "C4:CD:50:44:C4:68",
+            "address": "172.16.255.231",
+            "uptime": "53s",
             "profile": "Paket 10 Mbps",
             "comment": "",
             "isIsolir": false
@@ -2698,7 +2941,7 @@
       "createdAt": "2026-09-21T15:42:08.196Z",
       "pppoeBillingMethod": "monthly_average",
       "monthlyAveragePppoeCount": 44,
-      "updatedAt": "2026-09-30T12:46:40.694Z",
+      "updatedAt": "2026-09-30T13:18:37.496Z",
       "password": "client123",
       "portalPin": "123456",
       "recurringEnabled": true,
@@ -2729,76 +2972,16 @@
         "isolirProfileName": "isolir",
         "connectionType": "auto",
         "connectionStatus": "connected",
-        "lastSyncedAt": "2026-09-30T12:51:52.929Z",
+        "lastSyncedAt": "2026-09-30T13:18:51.744Z",
         "totalPppoeSecrets": 158,
         "totalSecretsNonIsolir": 98,
         "totalSecretsIsolir": 60,
         "activePppoeCount": 0,
         "nonIsolirCount": 0,
         "isolirCount": 0,
-        "hotspotActiveCount": 76,
-        "monthlyAverageNonIsolir": 32,
+        "hotspotActiveCount": 74,
+        "monthlyAverageNonIsolir": 0,
         "samples": [
-          {
-            "timestamp": "2026-09-26T14:04:20.558Z",
-            "activeCount": 141,
-            "nonIsolirCount": 88,
-            "isolirCount": 53
-          },
-          {
-            "timestamp": "2026-09-26T14:04:35.940Z",
-            "activeCount": 141,
-            "nonIsolirCount": 88,
-            "isolirCount": 53
-          },
-          {
-            "timestamp": "2026-09-26T14:05:29.198Z",
-            "activeCount": 141,
-            "nonIsolirCount": 88,
-            "isolirCount": 53
-          },
-          {
-            "timestamp": "2026-09-26T14:05:35.683Z",
-            "activeCount": 141,
-            "nonIsolirCount": 88,
-            "isolirCount": 53
-          },
-          {
-            "timestamp": "2026-09-26T14:06:10.330Z",
-            "activeCount": 141,
-            "nonIsolirCount": 88,
-            "isolirCount": 53
-          },
-          {
-            "timestamp": "2026-09-26T14:07:50.933Z",
-            "activeCount": 141,
-            "nonIsolirCount": 88,
-            "isolirCount": 53
-          },
-          {
-            "timestamp": "2026-09-26T14:07:57.715Z",
-            "activeCount": 141,
-            "nonIsolirCount": 88,
-            "isolirCount": 53
-          },
-          {
-            "timestamp": "2026-09-30T11:39:56.311Z",
-            "activeCount": 0,
-            "nonIsolirCount": 0,
-            "isolirCount": 0
-          },
-          {
-            "timestamp": "2026-09-30T12:40:14.503Z",
-            "activeCount": 0,
-            "nonIsolirCount": 0,
-            "isolirCount": 0
-          },
-          {
-            "timestamp": "2026-09-30T12:40:27.694Z",
-            "activeCount": 0,
-            "nonIsolirCount": 0,
-            "isolirCount": 0
-          },
           {
             "timestamp": "2026-09-30T12:42:33.484Z",
             "activeCount": 0,
@@ -2852,25 +3035,151 @@
             "activeCount": 0,
             "nonIsolirCount": 0,
             "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:04:44.795Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:04:57.940Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:06:07.305Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:06:22.064Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:07:29.900Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:07:43.905Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:08:53.873Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:09:06.309Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:10:13.830Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:10:27.979Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:11:36.653Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:11:49.667Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:12:57.933Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:13:12.007Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:14:38.004Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:14:51.518Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:15:58.292Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:16:12.771Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:17:23.446Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:17:36.813Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
+          },
+          {
+            "timestamp": "2026-09-30T13:18:51.744Z",
+            "activeCount": 0,
+            "nonIsolirCount": 0,
+            "isolirCount": 0
           }
         ],
         "preferredBillingMethod": "monthly_average",
         "systemIdentity": "ACO",
         "rosVersion": "7.20.8 (long-term)",
         "boardName": "CCR2004-16G-2S+",
-        "uptime": "1d8h31m9s",
-        "cpuLoad": 3,
-        "freeMemory": "3719.4 MiB",
+        "uptime": "1d8h58m7s",
+        "cpuLoad": 9,
+        "freeMemory": "3717.1 MiB",
         "totalMemory": "4096.0 MiB",
-        "freeHdd": "67.3 MiB",
+        "freeHdd": "69.9 MiB",
         "totalHdd": "128.0 MiB",
         "architectureName": "arm64",
         "activeUsersList": [],
         "realtimeSource": "routeros_api"
       },
       "createdAt": "2026-09-26T14:04:35.940Z",
-      "monthlyAveragePppoeCount": 32,
-      "updatedAt": "2026-09-30T12:47:09.886Z",
+      "monthlyAveragePppoeCount": 92,
+      "updatedAt": "2026-09-30T13:17:36.813Z",
       "recurringEnabled": true,
       "includeVpn": false,
       "includeMonitoring": false,
@@ -3025,6 +3334,20 @@
     }
   ],
   "automationLogs": [
+    {
+      "id": "sync-1790773381126",
+      "invoiceId": "SYSTEM-SPREADSHEET-SYNC",
+      "invoiceNumber": "SYNC-381126",
+      "customerName": "Google Spreadsheet Sync",
+      "customerPhone": "",
+      "customerEmail": "spreadsheet@system.local",
+      "ruleType": "Sinkronisasi Google Spreadsheet",
+      "channel": "both",
+      "status": "sent",
+      "message": "Sinkronisasi Google Spreadsheet berhasil (10 invoice, 2 pelanggan). Database lokal disinkronkan (10 invoice). Data siap diunduh atau dipush ke Sheet ID \"1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms\".",
+      "dispatchedAt": "2026-09-30T13:03:01.126Z",
+      "amount": 27848300
+    },
     {
       "id": "sync-1790773348306",
       "invoiceId": "SYSTEM-SPREADSHEET-SYNC",
